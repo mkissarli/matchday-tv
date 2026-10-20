@@ -1,0 +1,1 @@
+Matchday is GPLv3. The complete corresponding source is published in the same GitHub repository as this APK release.

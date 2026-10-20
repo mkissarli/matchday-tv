@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Matchday" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0E0F10</item>
+        <item name="android:colorAccent">#D95D43</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

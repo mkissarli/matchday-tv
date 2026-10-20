@@ -1,0 +1,100 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
+}
+
+android {
+    namespace = "dev.matchday.tv"
+    compileSdk = 37
+
+    defaultConfig {
+        applicationId = "dev.matchday.tv"
+        minSdk = 28
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1.0"
+
+        ndk {
+            // Fire OS 7 sticks are 32-bit; Google TV devices may be arm64; x86_64 is the emulator.
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
+    }
+
+    signingConfigs {
+        // Release signing is opt-in. CI/local builds without a keystore stay debug-signed;
+        // the public release workflow will supply these environment variables.
+        val storePath = System.getenv("MATCHDAY_KEYSTORE")
+        if (!storePath.isNullOrBlank() && rootProject.file(storePath).exists()) {
+            create("release") {
+                storeFile = rootProject.file(storePath)
+                storePassword = System.getenv("MATCHDAY_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MATCHDAY_KEY_ALIAS")
+                keyPassword = System.getenv("MATCHDAY_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Prefer the real release key when provided; debug signing is only a local fallback.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources.excludes += setOf(
+            "/META-INF/{AL2.0,LGPL2.1}",
+            "META-INF/DEPENDENCIES",
+            "META-INF/LICENSE*",
+            "META-INF/NOTICE*",
+        )
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.foundation)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    implementation(libs.androidx.tv.material)
+
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.profileinstaller)
+
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // GPLv3 headless engine. Source: https://github.com/ahXN00/OwnTV_Core
+    implementation(libs.owntv.core)
+    implementation(libs.owntv.player.core)
+
+    testImplementation(libs.junit)
+}
