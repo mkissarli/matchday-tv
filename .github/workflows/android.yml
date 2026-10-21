@@ -31,16 +31,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Domain tests
+        run: ./gradlew :domain:test
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug
 
       - name: Name artifact
-        run: cp app/build/outputs/apk/debug/app-debug.apk matchday-debug.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk matchday-debug.apk
+          sha256sum matchday-debug.apk > matchday-debug.apk.sha256
 
-      - name: Checksum
-        run: sha256sum matchday-debug.apk > matchday-debug.apk.sha256
-
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: matchday-debug-apk
@@ -55,15 +57,46 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download APK
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: matchday-debug-apk
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode release keystore
+        if: ${{ secrets.MATCHDAY_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.MATCHDAY_KEYSTORE_BASE64 }}" | base64 --decode > matchday-release.jks
+
+      - name: Build release APK
+        env:
+          MATCHDAY_KEYSTORE: ${{ secrets.MATCHDAY_KEYSTORE_BASE64 != '' && 'matchday-release.jks' || '' }}
+          MATCHDAY_KEYSTORE_PASSWORD: ${{ secrets.MATCHDAY_KEYSTORE_PASSWORD }}
+          MATCHDAY_KEY_ALIAS: ${{ secrets.MATCHDAY_KEY_ALIAS }}
+          MATCHDAY_KEY_PASSWORD: ${{ secrets.MATCHDAY_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease
+
+      - name: Name release artifact
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cp app/build/outputs/apk/release/app-release.apk "matchday-${VERSION}.apk"
+          sha256sum "matchday-${VERSION}.apk" > "matchday-${VERSION}.apk.sha256"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            matchday-debug.apk
-            matchday-debug.apk.sha256
+            matchday-*.apk
+            matchday-*.apk.sha256

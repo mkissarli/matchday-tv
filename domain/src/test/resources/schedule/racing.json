@@ -1,0 +1,36 @@
+{
+  "events": [
+    {
+      "idEvent": "3001",
+      "strEvent": "Monaco Grand Prix",
+      "strSport": "Motorsport",
+      "idLeague": "4370",
+      "strLeague": "Formula 1",
+      "strTimestamp": "2024-08-25T14:00:00",
+      "dateEvent": "2024-08-25",
+      "strTime": "14:00:00",
+      "strHomeTeam": "",
+      "strAwayTeam": null,
+      "strVenue": "Circuit de Monaco",
+      "strTVStation": "Sky Sports F1",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "3002",
+      "strEvent": "Tour of the North Stage 4",
+      "strSport": "Cycling",
+      "idLeague": "4386",
+      "strLeague": "UCI WorldTour",
+      "strTimestamp": null,
+      "dateEvent": "2024-08-25",
+      "strTime": "12:15:00",
+      "strHomeTeam": null,
+      "strAwayTeam": null,
+      "strVenue": "North Pass",
+      "strTVStation": "Eurosport 1",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    }
+  ]
+}

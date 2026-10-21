@@ -28,3 +28,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Matchday"
 include(":app")
+include(":domain")

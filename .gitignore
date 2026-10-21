@@ -12,3 +12,7 @@ captures/
 tools/fault-server/media/
 matchday.mp4
 matchday-rec.png
+*.jks
+*.keystore
+keystore.properties
+__pycache__/

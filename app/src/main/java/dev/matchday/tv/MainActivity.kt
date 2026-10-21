@@ -21,6 +21,7 @@ import dev.matchday.tv.design.MatchdayBackground
 import dev.matchday.tv.design.MatchdayTheme
 import dev.matchday.tv.design.NavDestination
 import dev.matchday.tv.design.TopBar
+import dev.matchday.tv.feature.catalog.CatalogDebugScreen
 import dev.matchday.tv.feature.live.GuideScreen
 import dev.matchday.tv.feature.live.LiveScreen
 import dev.matchday.tv.feature.live.PlayableChannel
@@ -70,21 +71,36 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MatchdayRoot(debugUrl: String?) {
     var destination by rememberSaveable { mutableStateOf(NavDestination.SPORTS) }
-    var playing by remember {
+    var catalogDebug by remember { mutableStateOf(false) }
+    var queue by remember {
         mutableStateOf(
             debugUrl?.let {
-                PlayableChannel(
-                    channel = ChannelEntity(sourceId = 0, name = "Debug stream", streamUrl = it),
-                    source = null,
-                    categoryName = "Debug",
+                listOf(
+                    PlayableChannel(
+                        channel = ChannelEntity(sourceId = 0, name = "Debug stream", streamUrl = it),
+                        source = null,
+                        categoryName = "Debug",
+                    ),
                 )
-            },
+            } ?: emptyList(),
         )
     }
 
-    val active = playing
-    if (active != null) {
-        PlayerScreen(playable = active, onBack = { playing = null })
+    if (queue.isNotEmpty()) {
+        PlayerScreen(queue = queue, onBack = { queue = emptyList() })
+        return
+    }
+
+    if (catalogDebug) {
+        MatchdayBackground {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 44.dp, vertical = 22.dp),
+            ) {
+                CatalogDebugScreen(onBack = { catalogDebug = false })
+            }
+        }
         return
     }
 
@@ -92,21 +108,28 @@ private fun MatchdayRoot(debugUrl: String?) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 44.dp, vertical = 30.dp),
+                .padding(horizontal = 44.dp, vertical = 22.dp),
         ) {
             TopBar(
                 selected = destination,
                 onSelect = { destination = it },
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(16.dp))
             when (destination) {
-                NavDestination.SPORTS -> SportsScreen(modifier = Modifier.weight(1f))
+                NavDestination.SPORTS -> SportsScreen(
+                    onPlay = { queue = it },
+                    onOpenChannels = { destination = NavDestination.LIVE },
+                    modifier = Modifier.weight(1f),
+                )
                 NavDestination.LIVE -> LiveScreen(
-                    onPlay = { playing = it },
+                    onPlay = { queue = it },
                     modifier = Modifier.weight(1f),
                 )
                 NavDestination.GUIDE -> GuideScreen(modifier = Modifier.weight(1f))
-                NavDestination.SETTINGS -> SettingsScreen(modifier = Modifier.weight(1f))
+                NavDestination.SETTINGS -> SettingsScreen(
+                    onOpenCatalog = { catalogDebug = true },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }

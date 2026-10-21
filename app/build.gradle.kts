@@ -15,8 +15,9 @@ android {
         versionName = "0.1.0"
 
         ndk {
-            // Fire OS 7 sticks are 32-bit; Google TV devices may be arm64; x86_64 is the emulator.
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            // Fire OS 7 sticks are 32-bit; Google TV devices may be arm64.
+            // The x86_64 emulator ABI is added only to the debug variant below.
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
@@ -38,12 +39,20 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            ndk {
+                abiFilters += "x86_64"
+            }
         }
         release {
             isMinifyEnabled = false
             isShrinkResources = false
             // Prefer the real release key when provided; debug signing is only a local fallback.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Release is for TV hardware only. The x86_64 emulator build stays in debug.
+            ndk {
+                abiFilters.clear()
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
         }
     }
 
@@ -68,6 +77,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":domain"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

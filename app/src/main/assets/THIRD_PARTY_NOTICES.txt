@@ -1,13 +1,13 @@
 # Third-party notices
 
-Matchday is GPLv3. This file records the main third-party components and where their source/licence information lives. It is not a substitute for the full licence texts shipped by each dependency.
+Matchday is GPLv3. This file records the main third-party components and where their source and licence information lives. It is not a substitute for the full licence texts shipped by each dependency.
 
 ## OwnTV Core / player-core
 
 - Project: https://github.com/ahXN00/OwnTV_Core
 - Licence: GNU GPL v3.0
 - Pinned version: `core-1.0.68`
-- Source in this repository: `third_party/owntv-core` (git submodule)
+- Source in this repository: `third_party/owntv-core` (git submodule, commit `c14e944b`)
 - Published artifacts used by the app:
   - `tv.own.owntv:core:1.0.68`
   - `tv.own.owntv:player-core:1.0.68`
@@ -16,12 +16,22 @@ Matchday uses the headless engine (database, sync, parsers, EPG, playback engine
 
 ## libmpv / FFmpeg
 
-- libmpv is GPLv2-or-later. The FFmpeg build's exact licence depends on its configure flags.
-- OwnTV's Android libmpv packaging: https://github.com/ahXN00/OwnTV_libmpv
-- libmpv: https://github.com/mpv-player/mpv
-- FFmpeg: https://ffmpeg.org/
+Audited from the binaries shipped in `tv.own.owntv:libmpv:2026.10.3` and the upstream release notes:
 
-A full binary-distribution audit, including the exact source/commit and any written offer required by GPL/LGPL, is still pending. Do not publish a release APK until that audit is complete.
+- libmpv package: https://github.com/ahXN00/OwnTV_libmpv/releases/tag/v2026.10.3
+- Pinned build sources: `buildscripts/include/depinfo.sh` at tag `v2026.10.3`
+- libmpv/mpv: https://github.com/mpv-player/mpv, build string `mpv v0.41.0-1092-g3186d369f-dirty`
+- FFmpeg: version `n9.0.2` (https://ffmpeg.org/), built with
+  `--enable-gpl --enable-version3`, without `--enable-nonfree`
+- Licence reported by the shipped libraries: **GPL version 3 or later**
+- Source code for the exact libmpv/FFmpeg builds is available from the pinned
+  `OwnTV_libmpv` tag above, including the build scripts and dependency pins. The
+  corresponding Matchday application source is this repository (GPLv3).
+
+The APK redistributes these GPLv3-or-later binaries. Anyone receiving the APK may
+obtain the corresponding source from the links above and from this repository.
+No non-free FFmpeg components (for example `--enable-nonfree` or FDK AAC) are
+enabled in the audited build.
 
 ## AndroidX / Jetpack
 
@@ -48,6 +58,29 @@ A full binary-distribution audit, including the exact source/commit and any writ
 - Coil: Apache License 2.0
 - https://coil-kt.github.io/coil/
 
+## Schedule data
+
+- Football fixtures: ESPN public scoreboard endpoints. Schedule fields only; Matchday
+  does not read scores, clocks or standings. ESPN terms and attribution apply.
+- Other sports: TheSportsDB public API. Matchday uses the free, keyless endpoint. The
+  app is schedule-only and stores no results.
+- No schedule provider is bundled as channel content; fixtures are display metadata.
+
 ## Test media
 
-The HLS/MPEG-TS files under `tools/fault-server/media` are generated locally from FFmpeg's `testsrc2` and `sine` sources and are development-only. They are not shipped content.
+The HLS/MPEG-TS files under `tools/fault-server/media` are generated locally from
+FFmpeg's `testsrc2` and `sine` sources and are development-only. They are not shipped
+content. The local fault server also generates synthetic XMLTV guide data at runtime.
+
+## Material Symbols
+
+- Sport and calendar icons: Material Symbols by Google, Apache License 2.0.
+- https://fonts.google.com/icons
+- Icons are converted from the supplied SVG paths into Android vector drawables; no font is bundled.
+
+## Team and league artwork
+
+Team crests, competition marks and channel logos are not bundled with Matchday. In
+normal use, artwork comes from the user's configured schedule/provider and remains
+subject to the rights of the clubs, leagues and broadcasters. If no artwork is
+available, Matchday draws a monogram fallback.

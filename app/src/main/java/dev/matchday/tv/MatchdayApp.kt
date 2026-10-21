@@ -2,6 +2,10 @@ package dev.matchday.tv
 
 import android.app.Application
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import dev.matchday.tv.di.appModule
 import dev.matchday.tv.di.playerModule
 import org.koin.android.ext.koin.androidContext
@@ -15,11 +19,16 @@ import tv.own.owntv.core.di.databaseModule
 import tv.own.owntv.core.di.dataModule
 import tv.own.owntv.core.sync.work.KoinWorkerFactory
 
-class MatchdayApp : Application(), Configuration.Provider {
+class MatchdayApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(KoinWorkerFactory())
+            .build()
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory()) }
             .build()
 
     override fun onCreate() {

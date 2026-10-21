@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "idEvent": "6001",
+      "strEvent": "Broken Timestamp Cup",
+      "strSport": "Soccer",
+      "strTimestamp": "not-a-timestamp",
+      "dateEvent": "2024-08-21",
+      "strTime": "19:45",
+      "strHomeTeam": "Alpha",
+      "strAwayTeam": "Beta",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "6002",
+      "strEvent": "Date Only Event",
+      "strSport": "Soccer",
+      "dateEvent": "2024-08-22",
+      "strTime": "",
+      "strHomeTeam": "Gamma",
+      "strAwayTeam": "Delta",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "6003",
+      "strEvent": "No Time At All",
+      "strSport": "Soccer",
+      "strTimestamp": null,
+      "dateEvent": null,
+      "strTime": null,
+      "strHomeTeam": "Epsilon",
+      "strAwayTeam": "Zeta",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    }
+  ]
+}

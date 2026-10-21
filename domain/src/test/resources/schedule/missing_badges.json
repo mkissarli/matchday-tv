@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "idEvent": "4001",
+      "strEvent": "Hafen 04 vs Rot-Weiss Stadt",
+      "strSport": "Soccer",
+      "idLeague": "4331",
+      "strLeague": "German Bundesliga",
+      "strTimestamp": "2024-08-24T18:30:00",
+      "strHomeTeam": "Hafen 04",
+      "strAwayTeam": "Rot-Weiss Stadt",
+      "strVenue": "Hafenarena",
+      "strTVStation": "Sky Sport Bundesliga",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    }
+  ]
+}

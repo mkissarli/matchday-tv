@@ -1,0 +1,42 @@
+{
+  "events": [
+    {
+      "idEvent": "1001",
+      "strEvent": "Arsenal vs Tottenham Hotspur",
+      "strSport": "Soccer",
+      "idLeague": "4328",
+      "strLeague": "English Premier League",
+      "strTimestamp": "2024-08-19T19:00:00",
+      "dateEvent": "2024-08-19",
+      "strTime": "19:00:00",
+      "strHomeTeam": "Arsenal",
+      "strAwayTeam": "Tottenham Hotspur",
+      "strHomeTeamBadge": "https://example.test/arsenal.png",
+      "strAwayTeamBadge": "https://example.test/spurs.png",
+      "strVenue": "Emirates Stadium",
+      "strTVStation": "Sky Sports Main Event",
+      "strStatus": "Not Started",
+      "strPostponed": "no",
+      "intHomeScore": "2",
+      "intAwayScore": "1"
+    },
+    {
+      "idEvent": "1002",
+      "strEvent": "Real Madrid vs Barcelona",
+      "strSport": "Soccer",
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strTimestamp": "2024-08-19T21:30:00",
+      "dateEvent": "2024-08-19",
+      "strTime": "21:30:00",
+      "strHomeTeam": "Real Madrid",
+      "strAwayTeam": "Barcelona",
+      "strHomeTeamBadge": "https://example.test/real.png",
+      "strAwayTeamBadge": "https://example.test/barca.png",
+      "strVenue": "Santiago Bernabeu",
+      "strTVStation": "DAZN LaLiga",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    }
+  ]
+}

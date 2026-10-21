@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import argparse
 import mimetypes
+import time
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -33,6 +35,41 @@ def playlist(host: str) -> bytes:
 #EXTINF:-1 tvg-id="matchday.test.ts" tvg-name="Test MPEG-TS" tvg-logo="" group-title="Test",Test MPEG-TS
 {base}/ok.ts
 """
+    return body.encode("utf-8")
+
+
+def fault_playlist(host: str) -> bytes:
+    """Same logical channel, first variant broken, second variant healthy."""
+    body = f"""#EXTM3U
+#EXTINF:-1 tvg-id="matchday.fault" tvg-name="Fault failover" tvg-logo="" group-title="Faults",Fault failover
+http://{host}/fault/404
+#EXTINF:-1 tvg-id="matchday.fault" tvg-name="Fault failover" tvg-logo="" group-title="Faults",Fault failover
+http://{host}/live/ok.ts
+"""
+    return body.encode("utf-8")
+
+
+def guide_xml() -> bytes:
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    def stamp(value: datetime) -> str:
+        return value.strftime("%Y%m%d%H%M%S +0000")
+    programmes = []
+    for channel in ("matchday.test.hls", "matchday.test.ts"):
+        for offset in (-1, 0, 1, 2):
+            start = now + timedelta(hours=offset)
+            stop = start + timedelta(hours=1)
+            title = f"{channel.split('.')[-1].upper()} Show {offset + 2}"
+            programmes.append(
+                f'<programme start="{stamp(start)}" stop="{stamp(stop)}" channel="{channel}">'
+                f'<title>{title}</title><desc>Synthetic EPG entry for Matchday tests.</desc>'
+                f'</programme>'
+            )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?><tv>'
+        '<channel id="matchday.test.hls"><display-name>Test HLS</display-name></channel>'
+        '<channel id="matchday.test.ts"><display-name>Test MPEG-TS</display-name></channel>'
+        + "".join(programmes) + '</tv>'
+    )
     return body.encode("utf-8")
 
 
@@ -58,6 +95,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(size))
         self.send_header("Accept-Ranges", "none")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.close_connection = True
         self.end_headers()
         if head_only:
             return
@@ -68,13 +107,15 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
 
-    def _send_playlist(self, head_only: bool = False) -> None:
+    def _send_playlist(self, head_only: bool = False, faults: bool = False) -> None:
         host = self.headers.get("Host") or f"127.0.0.1:{self.server.server_port}"
-        data = playlist(host)
+        data = fault_playlist(host) if faults else playlist(host)
         self.send_response(200)
         self.send_header("Content-Type", "audio/x-mpegurl; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.close_connection = True
         self.end_headers()
         if not head_only:
             self.wfile.write(data)
@@ -99,10 +140,68 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/playlist.m3u":
             self._send_playlist(head_only)
             return
+        if path == "/fault-playlist.m3u":
+            self._send_playlist(head_only, faults=True)
+            return
+        if path == "/guide.xml":
+            data = guide_xml()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/xml; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.close_connection = True
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(data)
+            return
+        if path == "/fault/404":
+            self.send_error(404, "injected not found")
+            return
+        if path in ("/fault/stall", "/fault/slow", "/fault/drop"):
+            self._send_fault(path.removeprefix("/fault/"), head_only)
+            return
         if path.startswith("/live/"):
             self._send_file(MEDIA / Path(path.removeprefix("/live/")).name, head_only)
             return
         self.send_error(404, "not found")
+
+    def _send_fault(self, kind: str, head_only: bool) -> None:
+        path = MEDIA / "ok.ts"
+        if not path.is_file():
+            self.send_error(500, "test media missing")
+            return
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", "video/mp2t")
+        self.send_header("Content-Length", str(size))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.close_connection = True
+        self.end_headers()
+        if head_only:
+            return
+        try:
+            with path.open("rb") as fh:
+                if kind == "stall":
+                    self.wfile.write(fh.read(32 * 1024))
+                    self.wfile.flush()
+                    time.sleep(120)
+                elif kind == "drop":
+                    self.wfile.write(fh.read(48 * 1024))
+                    self.wfile.flush()
+                    # Close mid-stream without sending the promised Content-Length.
+                    return
+                elif kind == "slow":
+                    while True:
+                        chunk = fh.read(4 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                        time.sleep(0.35)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"{self.address_string()} - {fmt % args}")

@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "idEvent": "2001",
+      "strEvent": "A. Moreau vs J. Weber",
+      "strSport": "Tennis",
+      "idLeague": "4464",
+      "strLeague": "ATP Masters",
+      "strTimestamp": "2024-08-19T13:30:00",
+      "dateEvent": "2024-08-19",
+      "strTime": "13:30:00",
+      "strHomeTeam": "A. Moreau",
+      "strAwayTeam": "J. Weber",
+      "strHomeTeamBadge": "",
+      "strAwayTeamBadge": null,
+      "strVenue": "Court Central",
+      "strTVStation": "Tennis Channel",
+      "strStatus": "Not Started",
+      "strPostponed": "no"
+    }
+  ]
+}
