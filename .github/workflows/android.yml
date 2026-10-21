@@ -75,13 +75,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Decode release keystore
-        if: ${{ secrets.MATCHDAY_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MATCHDAY_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.MATCHDAY_KEYSTORE_BASE64 }}" | base64 --decode > matchday-release.jks
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > matchday-release.jks
+          fi
 
       - name: Build release APK
         env:
-          MATCHDAY_KEYSTORE: ${{ secrets.MATCHDAY_KEYSTORE_BASE64 != '' && 'matchday-release.jks' || '' }}
+          MATCHDAY_KEYSTORE: matchday-release.jks
           MATCHDAY_KEYSTORE_PASSWORD: ${{ secrets.MATCHDAY_KEYSTORE_PASSWORD }}
           MATCHDAY_KEY_ALIAS: ${{ secrets.MATCHDAY_KEY_ALIAS }}
           MATCHDAY_KEY_PASSWORD: ${{ secrets.MATCHDAY_KEY_PASSWORD }}

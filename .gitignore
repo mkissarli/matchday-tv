@@ -16,3 +16,4 @@ matchday-rec.png
 *.keystore
 keystore.properties
 __pycache__/
+release/
