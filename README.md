@@ -55,6 +55,8 @@ Install and launch:
 adb shell am start -n dev.matchday.tv.debug/dev.matchday.tv.MainActivity
 ```
 
+PC emulator test checklist: [docs/TESTING.md](docs/TESTING.md)
+
 Windows helpers:
 
 ```powershell
