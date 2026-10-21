@@ -1,6 +1,7 @@
 package dev.matchday.tv.di
 
 import dev.matchday.tv.data.CompositeScheduleProvider
+import dev.matchday.tv.data.EspnMultiSportProvider
 import dev.matchday.tv.data.EspnSoccerProvider
 import dev.matchday.tv.data.MatchRepository
 import dev.matchday.tv.data.PlaybackPreferences
@@ -20,7 +21,8 @@ val appModule = module {
     single<FixtureProvider> {
         CompositeScheduleProvider(
             football = EspnSoccerProvider(get()),
-            otherSports = TheSportsDbProvider(get()),
+            otherSports = EspnMultiSportProvider(get()),
+            fallbackSports = TheSportsDbProvider(get()),
         )
     }
     single { ScheduleCache(androidContext().filesDir.resolve("schedule-cache.json")) }

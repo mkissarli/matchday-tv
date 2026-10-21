@@ -14,11 +14,12 @@ Matchday ships with **no channels, playlists, subscriptions, credentials or medi
 ![Player](docs/screenshots/player-ts.png)
 ![Settings](docs/screenshots/settings.png)
 
-## What is in v0.1.0
+## What is in v0.1.1
 
-- **Schedule-first Sports Hub** — football (soccer), tennis, motorsport, cycling, Olympic sports and fighting are data-driven registry entries, not enum branches. A seven-day window, date-labelled cards, sport tabs, event detail and “Find channels”.
-- **Football means association football** — ESPN’s keyless soccer feed supplies European, English and Latin American fixtures. NFL/NCAA is a separate `american-football` sport and never leaks into the Football tab.
+- **Schedule-first Sports Hub** — football (soccer), tennis, motorsport, cycling, Olympic sports and fighting are data-driven registry entries, not enum branches. A seven-day window, date-labelled cards, sport tabs, three headline matches, “Find channels”, and league sections that can be selected or collapsed.
+- **Football means association football** — ESPN’s keyless soccer feed supplies European, English and Latin American fixtures. NFL/NCAA is a separate `american-football` sport and never leaks into the Football tab. Other launch sports use ESPN’s F1, ATP/WTA, UFC and NFL scoreboards.
 - **Schedule-only** — ESPN/TheSportsDB schedule fields only. There is deliberately no score, clock, standing or result field in the domain model, and no real-time polling.
+- **League-aware ordering** — competition sections are sorted by an approximate static popularity/viewership proxy (Premier League and Champions League first, then the other major leagues and sports). The league chips select a competition; each section header collapses. The order is deliberately local and does not poll ratings.
 - **Automatic channel catalogue** — M3U import, name normalisation, quality parsing, language/country detection, genre rules, and logical-channel merging with confidence and variant awareness.
 - **Live TV browser** — category rail, search, favourites, recently watched, now/next from EPG, and a four-hour guide grid.
 - **Resilient playback** — libmpv for HLS and raw MPEG-TS, a quality ceiling (Auto/4K/FHD/HD/SD), variant fallback, cross-channel fixture failover, retry cooldown, failure caps and language priority **English → French → Arabic → German**.
@@ -111,9 +112,12 @@ locally; it is not shipped as content.
 
 ### Schedule sources
 
-- Football: ESPN public soccer scoreboard (`soccer/all`) — keyless.
-- Other sports: TheSportsDB free keyless API — best-effort; the free tier is shared and
-  rate-limited, so the cached schedule is used when necessary.
+- Football: ESPN public soccer scoreboard (`soccer/all`) — keyless, with a generated
+  219-league id-to-name map for readable sections.
+- Motorsport/tennis/fighting/American football: ESPN F1, ATP, WTA, UFC and NFL
+  scoreboards — keyless.
+- Cycling/Olympic/other fallback: TheSportsDB free keyless API — best-effort; the free
+  tier is shared and rate-limited, so those tabs can be empty when no free feed exists.
 - No paid keys, no real-time scores, no standings.
 
 ## Known limitations
@@ -121,8 +125,10 @@ locally; it is not shipped as content.
 - The ExoPlayer live path is present through the core engine but currently reconnects a
   healthy picture on the emulator due to a frame-watchdog false positive. libmpv is the
   default and working path.
-- Free schedule coverage is necessarily partial. The hub shows what the free providers
-  publish and labels the attribution in the UI.
+- Free schedule coverage is necessarily partial. Football and the ESPN-backed sports are
+  broad; cycling/Olympic coverage depends on what TheSportsDB publishes and can be empty.
+- League order is a static popularity proxy, not live ratings; it is intentionally local
+  and can be replaced with a configurable ranking later.
 - Phone setup is LAN-only by design. It is not a remote/cloud pairing service.
 - Release APKs are published through GitHub Releases, not committed to the repository.
   Build one locally or use the tag-triggered workflow.

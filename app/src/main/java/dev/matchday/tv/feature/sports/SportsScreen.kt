@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import dev.matchday.domain.schedule.Participant
 import dev.matchday.domain.schedule.ScheduleEvent
+import dev.matchday.domain.schedule.LeaguePopularity
 import dev.matchday.domain.schedule.SportRegistry
 import dev.matchday.domain.schedule.SportRegistryEntry
 import dev.matchday.tv.design.EmptyState
@@ -69,134 +70,220 @@ fun SportsScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var selectedLeague by remember { mutableStateOf<String?>(null) }
+    var collapsedLeagues by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showMatches by remember { mutableStateOf(false) }
+    // Read this in the composable body so toggling a header actually invalidates the
+    // LazyColumn content (the LazyListScope lambda itself is not a composable).
+    val collapsedSnapshot = collapsedLeagues
     val filtered = remember(state.events, state.selectedSportId) {
         if (state.selectedSportId == "all") state.events
         else state.events.filter { it.sportId == state.selectedSportId }
     }
-    LaunchedEffect(filtered) {
-        if (filtered.none { it.id == selectedId }) selectedId = filtered.firstOrNull()?.id
+    val leagueOptions = remember(filtered) {
+        filtered.groupBy { eventLabel(it) }.keys
+            .sortedWith(compareBy({ LeaguePopularity.rank(it) }, { it }))
     }
-    val selected = filtered.firstOrNull { it.id == selectedId } ?: filtered.firstOrNull()
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        SportsHeader(
-            count = filtered.size,
-            liveCount = filtered.count { isLive(it) },
-            attribution = state.attribution,
-            onRefresh = vm::refresh,
-            onOpenChannels = onOpenChannels,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        if (state.loading && state.events.isEmpty()) {
-            Text("Loading the schedule…", style = LocalMatchdayType.current.body, color = MatchdayColors.Muted)
-        } else if (state.error != null) {
-            EmptyState(
-                eyebrow = "SCHEDULE",
-                title = "Schedule unavailable.",
-                body = "The schedule source could not be reached: ${state.error}",
-                action = {
-                    FocusableSurface(onClick = vm::refresh, shape = RoundedCornerShape(8.dp)) {
-                        Text("Retry", style = LocalMatchdayType.current.subtitle, color = MatchdayColors.Ivory)
-                    }
-                },
-            )
-        } else if (filtered.isEmpty()) {
-            EmptyState(
-                eyebrow = "SCHEDULE",
-                title = "No events in the next seven days.",
-                body = "The free schedule source returned nothing for this sport. Try All or refresh.",
-            )
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(190.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                val preview = selected
-                MediaPreview(
-                    title = preview?.let(::displayTitle) ?: "Select an event",
-                    subtitle = preview?.let { eventSubtitle(it) } ?: "",
-                    badge = preview?.let { if (isLive(it)) "LIVE" else dateTime(it.startMs) },
-                    modifier = Modifier.weight(0.38f).fillMaxWidth().height(190.dp),
-                )
-                EventDetail(
-                    event = preview,
-                    matchCount = preview?.let { state.matches[it.id]?.size },
-                    onFindChannels = {
-                        preview?.let {
-                            vm.findChannels(it)
-                            showMatches = true
-                        }
+    val visibleEvents = remember(filtered, selectedLeague) {
+        if (selectedLeague == null) filtered else filtered.filter { eventLabel(it) == selectedLeague }
+    }
+    LaunchedEffect(state.selectedSportId) {
+        selectedLeague = null
+        collapsedLeagues = emptySet()
+    }
+    LaunchedEffect(leagueOptions) {
+        if (selectedLeague != null && selectedLeague !in leagueOptions) selectedLeague = null
+    }
+    val orderedEvents = remember(visibleEvents) {
+        visibleEvents.sortedWith(compareBy({ sportRank(it.sportId) }, { it.startMs }))
+    }
+    LaunchedEffect(orderedEvents) {
+        if (orderedEvents.none { it.id == selectedId }) selectedId = orderedEvents.firstOrNull()?.id
+    }
+    val selected = orderedEvents.firstOrNull { it.id == selectedId } ?: orderedEvents.firstOrNull()
+    val grouped = remember(orderedEvents) {
+        orderedEvents.groupBy { eventLabel(it) }
+            .toList()
+            .sortedWith(
+                compareBy(
+                    { (league, _) -> LeaguePopularity.rank(league) },
+                    { (_, events) ->
+                        val first = events.firstOrNull()
+                        if (first == null) Int.MAX_VALUE else sportRank(first.sportId)
                     },
-                    modifier = Modifier.weight(0.62f).fillMaxWidth().height(190.dp),
-                )
+                    { (_, events) -> events.minOfOrNull { it.startMs } ?: Long.MAX_VALUE },
+                ),
+            )
+    }
+    val headlineEvents = remember(orderedEvents) {
+        val candidates = orderedEvents.sortedWith(
+            compareBy(
+                { event ->
+                    val liveBump = if (isLive(event)) 8 else 0
+                    LeaguePopularity.rank(eventLabel(event)) - liveBump
+                },
+                { it.startMs },
+            ),
+        )
+        val picked = LinkedHashMap<String, ScheduleEvent>()
+        candidates.forEach { event ->
+            if (picked.size < 3) picked.putIfAbsent(eventLabel(event), event)
+        }
+        if (picked.size < 3) {
+            candidates.forEach { event ->
+                if (picked.size < 3 && picked.values.none { it.id == event.id }) {
+                    picked["extra:${event.id}"] = event
+                }
             }
-            Spacer(Modifier.height(9.dp))
+        }
+        picked.values.toList()
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
+    ) {
+        item(key = "sports-header") {
+            SportsHeader(
+                count = visibleEvents.size,
+                liveCount = visibleEvents.count { isLive(it) },
+                attribution = state.attribution,
+                onRefresh = vm::refresh,
+                onOpenChannels = onOpenChannels,
+            )
+        }
+        item(key = "sports-tabs") {
             SportTabs(
                 sports = state.sports,
                 selected = state.selectedSportId,
                 onSelect = vm::selectSport,
             )
-            Spacer(Modifier.height(7.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Live & upcoming",
-                    style = LocalMatchdayType.current.title.copy(fontSize = 20.sp),
-                    color = MatchdayColors.Ivory,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = "${filtered.count { isLive(it) }} live · ${filtered.size - filtered.count { isLive(it) }} upcoming",
-                    style = LocalMatchdayType.current.meta,
-                    color = MatchdayColors.Muted,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = (if (state.fromCache) "Saved schedule · " else "Schedule only · no scores · ") + state.attribution.ifBlank { "ESPN" },
-                    style = LocalMatchdayType.current.meta,
-                    color = MatchdayColors.Dim,
+        }
+        if (leagueOptions.size > 1) {
+            item(key = "sports-leagues") {
+                LeagueFilterRow(
+                    leagues = leagueOptions,
+                    selected = selectedLeague,
+                    onSelect = { selectedLeague = it },
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
-            ) {
-                items(filtered.chunked(3), key = { row -> row.joinToString("|") { it.id } }) { rowEvents ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        rowEvents.forEach { event ->
-                            EventCard(
-                                event = event,
-                                selected = event.id == selected?.id,
-                                onFocused = { selectedId = event.id },
-                                modifier = Modifier.weight(1f),
-                            )
+        }
+        if (state.loading && state.events.isEmpty()) {
+            item(key = "sports-loading") {
+                Text("Loading the schedule…", style = LocalMatchdayType.current.body, color = MatchdayColors.Muted)
+            }
+        } else if (state.error != null) {
+            item(key = "sports-error") {
+                EmptyState(
+                    eyebrow = "SCHEDULE",
+                    title = "Schedule unavailable.",
+                    body = "The schedule source could not be reached: ${state.error}",
+                    action = {
+                        FocusableSurface(onClick = vm::refresh, shape = RoundedCornerShape(8.dp)) {
+                            Text("Retry", style = LocalMatchdayType.current.subtitle, color = MatchdayColors.Ivory)
                         }
-                        repeat(3 - rowEvents.size) { Spacer(Modifier.weight(1f)) }
+                    },
+                )
+            }
+        } else if (visibleEvents.isEmpty()) {
+            item(key = "sports-empty") {
+                EmptyState(
+                    eyebrow = "SCHEDULE",
+                    title = "No events in the next seven days.",
+                    body = "The schedule source returned nothing for this sport. Choose All or refresh.",
+                )
+            }
+        } else {
+            item(key = "sports-headlines") {
+                Column {
+                    SectionLabel("HEADLINES")
+                    Spacer(Modifier.height(4.dp))
+                    HeadlineRow(
+                        events = headlineEvents,
+                        selectedId = selected?.id,
+                        onFocus = { selectedId = it.id },
+                        onOpen = { event ->
+                            selectedId = event.id
+                            vm.findChannels(event)
+                            showMatches = true
+                        },
+                    )
+                }
+            }
+            item(key = "sports-section") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Live & upcoming",
+                        style = LocalMatchdayType.current.title.copy(fontSize = 20.sp),
+                        color = MatchdayColors.Ivory,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${visibleEvents.count { isLive(it) }} live · ${visibleEvents.size - visibleEvents.count { isLive(it) }} upcoming",
+                        style = LocalMatchdayType.current.meta,
+                        color = MatchdayColors.Muted,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = (if (state.fromCache) "Saved schedule · " else "Schedule only · no scores · ") + state.attribution.ifBlank { "ESPN" },
+                        style = LocalMatchdayType.current.meta,
+                        color = MatchdayColors.Dim,
+                    )
+                }
+            }
+            grouped.forEach { (league, events) ->
+                val collapsed = league in collapsedSnapshot
+                item(key = "league:$league") {
+                    LeagueHeader(
+                        label = league,
+                        count = events.size,
+                        collapsed = collapsed,
+                        onToggle = {
+                            android.util.Log.i("MatchdaySports", "toggle league=$league collapsed=$collapsed")
+                            collapsedLeagues = if (collapsed) collapsedLeagues - league else collapsedLeagues + league
+                        },
+                    )
+                }
+                if (!collapsed) {
+                    items(events.chunked(3), key = { row -> row.joinToString("|") { it.id } }) { rowEvents ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            rowEvents.forEach { event ->
+                                EventCard(
+                                    event = event,
+                                    selected = event.id == selected?.id,
+                                    onFocused = { selectedId = event.id },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(3 - rowEvents.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
                 }
             }
         }
-        if (showMatches && selected != null) {
-            val matches = state.matches[selected.id].orEmpty()
-            MatchDialog(
-                event = selected,
-                matches = matches,
-                loading = state.matchingEventId == selected.id,
-                error = state.matchError,
-                onDismiss = { showMatches = false },
-                onPlay = { chosen ->
-                    showMatches = false
-                    onPlay(
-                        listOf(chosen) + matches
-                            .filterNot { it.channel.id == chosen.channel.id }
-                            .map { it.playable() },
-                    )
-                },
-            )
-        }
+    }
+
+    if (showMatches && selected != null) {
+        val matches = state.matches[selected.id].orEmpty()
+        MatchDialog(
+            event = selected,
+            matches = matches,
+            loading = state.matchingEventId == selected.id,
+            error = state.matchError,
+            onDismiss = { showMatches = false },
+            onPlay = { chosen ->
+                showMatches = false
+                onPlay(
+                    listOf(chosen) + matches
+                        .filterNot { it.channel.id == chosen.channel.id }
+                        .map { it.playable() },
+                )
+            },
+        )
     }
 }
 
@@ -341,6 +428,201 @@ private fun SportChip(label: String, iconKey: String, selected: Boolean, onClick
                 },
                 maxLines = 1,
             )
+        }
+    }
+}
+
+@Composable
+private fun LeagueFilterRow(
+    leagues: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        item(key = "league-all") {
+            LeagueChip("All leagues", selected == null) { onSelect(null) }
+        }
+        items(leagues, key = { it }) { league ->
+            LeagueChip(league, selected == league) { onSelect(league) }
+        }
+    }
+}
+
+@Composable
+private fun LeagueChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickable(onClick = onClick)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
+            .background(
+                when {
+                    focused -> MatchdayColors.Ivory
+                    selected -> MatchdayColors.SurfaceRaised
+                    else -> Color.Transparent
+                },
+                RoundedCornerShape(50),
+            )
+            .border(
+                if (selected && !focused) 1.dp else 0.dp,
+                if (selected && !focused) MatchdayColors.CardLine else Color.Transparent,
+                RoundedCornerShape(50),
+            )
+            .padding(horizontal = 11.dp, vertical = 5.dp),
+    ) {
+        Text(
+            text = label,
+            style = LocalMatchdayType.current.meta.copy(fontSize = 12.sp),
+            color = when {
+                focused -> MatchdayColors.Ink
+                selected -> MatchdayColors.Ivory
+                else -> MatchdayColors.Muted
+            },
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun LeagueHeader(
+    label: String,
+    count: Int,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
+) {
+    FocusableSurface(
+        onClick = onToggle,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (collapsed) "▸" else "▾",
+                style = LocalMatchdayType.current.meta.copy(fontSize = 13.sp),
+                color = MatchdayColors.Brick,
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                text = label.uppercase(),
+                style = LocalMatchdayType.current.label.copy(fontSize = 11.sp, letterSpacing = 1.1.sp),
+                color = MatchdayColors.Brick,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = count.toString(),
+                style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
+                color = MatchdayColors.Dim,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeadlineRow(
+    events: List<ScheduleEvent>,
+    selectedId: String?,
+    onFocus: (ScheduleEvent) -> Unit,
+    onOpen: (ScheduleEvent) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(168.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        events.take(3).forEach { event ->
+            HeadlineCard(
+                event = event,
+                selected = event.id == selectedId,
+                onFocus = { onFocus(event) },
+                onClick = { onOpen(event) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        repeat((3 - events.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun HeadlineCard(
+    event: ScheduleEvent,
+    selected: Boolean,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FocusableSurface(
+        onClick = onClick,
+        onFocused = onFocus,
+        selected = selected,
+        modifier = modifier.height(168.dp),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp),
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = eventLabel(event).uppercase(),
+                    style = LocalMatchdayType.current.label.copy(fontSize = 10.sp),
+                    color = MatchdayColors.Brick,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (isLive(event)) {
+                    MetaChip("LIVE", accent = true)
+                } else {
+                    Text(
+                        text = dateTime(event.startMs),
+                        style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
+                        color = MatchdayColors.Muted,
+                    )
+                }
+            }
+            Spacer(Modifier.height(9.dp))
+            if (event.participants.size >= 2) {
+                event.participants.take(2).forEach { participant ->
+                    CompactParticipant(participant)
+                    Spacer(Modifier.height(4.dp))
+                }
+            } else {
+                Text(
+                    text = displayTitle(event),
+                    style = LocalMatchdayType.current.title.copy(fontSize = 18.sp),
+                    color = MatchdayColors.Ivory,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = event.venue ?: event.broadcaster ?: "Schedule only",
+                    style = LocalMatchdayType.current.meta.copy(fontSize = 10.sp),
+                    color = MatchdayColors.Dim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "CHANNELS",
+                    style = LocalMatchdayType.current.label.copy(fontSize = 9.sp),
+                    color = MatchdayColors.Brick,
+                )
+            }
         }
     }
 }
@@ -503,7 +785,7 @@ private fun EventCard(
             Spacer(Modifier.height(7.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = event.broadcaster ?: event.venue ?: event.sportId.replace('-', ' '),
+                    text = event.broadcaster ?: event.venue ?: eventLabel(event),
                     style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
                     color = MatchdayColors.Dim,
                     maxLines = 1,
@@ -553,6 +835,9 @@ private fun eventSubtitle(event: ScheduleEvent): String = listOfNotNull(
     dateTime(event.startMs),
     event.broadcaster,
 ).joinToString(" · ")
+
+private fun sportRank(sportId: String): Int =
+    SportRegistry.all.indexOfFirst { it.id == sportId }.let { if (it < 0) 99 else it }
 
 private fun eventLabel(event: ScheduleEvent): String =
     event.competitionName?.takeIf { it.isNotBlank() }

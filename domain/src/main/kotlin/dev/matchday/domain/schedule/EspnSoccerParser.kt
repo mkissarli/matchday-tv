@@ -47,18 +47,20 @@ object EspnSoccerParser {
         val broadcaster = competition.optJSONArray("broadcasts")?.let(::broadcasts)
         val status = competition.optJSONObject("status")?.optJSONObject("type")
             ?.optString("name").orEmpty()
-        val competitionName = competition.optJSONArray("notes")
-            ?.optJSONObject(0)?.optString("headline")?.takeIf { it.isNotBlank() }
-            ?.takeUnless { headline ->
-                listOf("1st leg", "2nd leg", "first leg", "second leg", "group stage", "round of")
-                    .any { headline.contains(it, ignoreCase = true) }
-            }
+        val leagueId = Regex("""~l:(\d+)~""").find(event.optString("uid"))?.groupValues?.getOrNull(1)
+        val competitionName = EspnSoccerLeagues.nameFor(leagueId)
+            ?: competition.optJSONArray("notes")
+                ?.optJSONObject(0)?.optString("headline")?.takeIf { it.isNotBlank() }
+                ?.takeUnless { headline ->
+                    listOf("1st leg", "2nd leg", "first leg", "second leg", "group stage", "round of")
+                        .any { headline.contains(it, ignoreCase = true) }
+                }
 
         return ScheduleEvent(
             id = "espn:$id",
             providerId = PROVIDER_ID,
             sportId = "football",
-            competitionId = null,
+            competitionId = leagueId,
             competitionName = competitionName,
             title = "$homeName vs $awayName",
             participants = listOf(

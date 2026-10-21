@@ -47,7 +47,8 @@ class SportsViewModel(
             val cached = withContext(Dispatchers.IO) { cache.load() }
             val now = System.currentTimeMillis()
             val usable = cached.events.filter {
-                it.startMs >= now - 2 * 60 * 60_000L && it.startMs <= now + 7 * 24 * 60 * 60_000L
+                (it.endMs ?: it.startMs) >= now - 2 * 60 * 60_000L &&
+                    it.startMs <= now + 7 * 24 * 60 * 60_000L
             }
             if (usable.isNotEmpty() && _state.value.events.isEmpty()) {
                 _state.update {

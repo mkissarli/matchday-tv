@@ -64,7 +64,17 @@ data class ScheduleQuery(
 ) {
     fun contains(startMs: Long): Boolean = startMs in fromMs..toMs
 
+    /**
+     * True when any part of the event overlaps the window. Multi-day events (tennis
+     * tournaments, race weekends) started before the window but are still relevant.
+     */
+    fun overlaps(startMs: Long, endMs: Long?): Boolean {
+        val eventEnd = endMs ?: startMs
+        return startMs <= toMs && eventEnd >= fromMs
+    }
+
     fun includesSport(sportId: String): Boolean = sportIds.isEmpty() || sportId in sportIds
 
-    fun matches(event: ScheduleEvent): Boolean = contains(event.startMs) && includesSport(event.sportId)
+    fun matches(event: ScheduleEvent): Boolean =
+        overlaps(event.startMs, event.endMs) && includesSport(event.sportId)
 }

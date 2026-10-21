@@ -237,6 +237,14 @@ private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, Str
                 Text(it, style = LocalMatchdayType.current.meta, color = MatchdayColors.Muted)
             }
         }
+        state.message?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(message, style = LocalMatchdayType.current.meta, color = MatchdayColors.Pitch)
+        }
+        state.error?.let { error ->
+            Spacer(Modifier.height(8.dp))
+            Text(error, style = LocalMatchdayType.current.meta, color = MatchdayColors.Brick)
+        }
     }
 }
 
