@@ -48,11 +48,6 @@ android {
             isShrinkResources = false
             // Prefer the real release key when provided; debug signing is only a local fallback.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
-            // Release is for TV hardware only. The x86_64 emulator build stays in debug.
-            ndk {
-                abiFilters.clear()
-                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-            }
         }
     }
 
@@ -73,6 +68,17 @@ android {
             "META-INF/LICENSE*",
             "META-INF/NOTICE*",
         )
+        // Optional: -Pmatchday.abis=arm64-v8a trims packaged native libs for hardware that is
+        // arm64-only (Sony/LG Google TVs), roughly halving the sideload size. The default
+        // release keeps both arm ABIs for Fire OS 7 32-bit sticks.
+        providers.gradleProperty("matchday.abis").orNull
+            ?.takeIf { it.isNotBlank() }
+            ?.let { requested ->
+                val keep = requested.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+                listOf("armeabi-v7a", "arm64-v8a")
+                    .filter { it !in keep }
+                    .forEach { abi -> jniLibs.excludes += "**/lib/$abi/**" }
+            }
     }
 }
 
