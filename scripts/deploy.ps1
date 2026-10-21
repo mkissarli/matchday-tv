@@ -7,10 +7,10 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
 # Override these two if your SDK/JDK live elsewhere.
-if (-not $env:JAVA_HOME) {
+if (-not $env:JAVA_HOME -or -not (Test-Path (Join-Path $env:JAVA_HOME "bin\java.exe"))) {
     $env:JAVA_HOME = "C:\Users\Thief3\AppData\Local\Android\JDK\jdk-21.0.12.1+1"
 }
-if (-not $env:ANDROID_HOME) {
+if (-not $env:ANDROID_HOME -or -not (Test-Path (Join-Path $env:ANDROID_HOME "platform-tools\adb.exe"))) {
     $env:ANDROID_HOME = "C:\Users\Thief3\AppData\Local\Android\Sdk"
 }
 
