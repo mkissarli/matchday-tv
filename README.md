@@ -6,6 +6,8 @@ Matchday ships with **no channels, playlists, subscriptions, credentials or medi
 
 > Working title. The final name and branding are still open.
 
+[Download the latest release](https://github.com/mkissarli/matchday-tv/releases)
+
 ![Sports Hub](docs/screenshots/sports.png)
 ![Live TV](docs/screenshots/live.png)
 ![Guide](docs/screenshots/guide.png)
@@ -120,8 +122,8 @@ locally; it is not shipped as content.
 - Free schedule coverage is necessarily partial. The hub shows what the free providers
   publish and labels the attribution in the UI.
 - Phone setup is LAN-only by design. It is not a remote/cloud pairing service.
-- No public release APK is committed to this repository. Build one locally or use the
-  tag-triggered workflow.
+- Release APKs are published through GitHub Releases, not committed to the repository.
+  Build one locally or use the tag-triggered workflow.
 
 ## Licence
 
