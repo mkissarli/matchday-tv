@@ -19,6 +19,8 @@ data class SetupPayload(
     val name: String,
     val playlistUrl: String,
     val epgUrl: String?,
+    /** Tick on the phone's setup page: also index movies & series. Default on. */
+    val includeVod: Boolean = true,
 )
 
 /**
@@ -102,6 +104,7 @@ class SetupServer(
                         name = form["name"]?.trim()?.takeIf { it.isNotBlank() } ?: "Phone playlist",
                         playlistUrl = url,
                         epgUrl = form["epg"]?.trim()?.takeIf { it.isNotBlank() },
+                        includeVod = form["vod"] != null,
                     )
                     onImport?.invoke(payload)
                     respond(
@@ -198,6 +201,8 @@ class SetupServer(
           main{max-width:560px;margin:0 auto;padding:28px 20px 48px}
           h1{font-size:32px;margin:0 0 4px}p{color:#aaa49a;line-height:1.45}
           label{display:block;margin:18px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#cf8b63}
+          label.check{display:flex;gap:10px;align-items:center;font-size:14px;letter-spacing:0;text-transform:none;color:#f4efe4;margin:22px 0 0;cursor:pointer}
+          label.check input{width:auto}
           input{width:100%;box-sizing:border-box;background:#201f1c;border:1px solid #3d3a34;color:#f4efe4;border-radius:8px;padding:13px;font-size:16px}
           button{width:100%;margin-top:24px;background:#d4643c;color:#fff;border:0;border-radius:8px;padding:15px;font-size:17px;font-weight:700}
           .code{background:#201f1c;border:1px solid #3d3a34;border-radius:8px;padding:14px;text-align:center;letter-spacing:.35em;font-size:28px;margin:18px 0}
@@ -215,6 +220,7 @@ class SetupServer(
             <input id="url" name="url" type="url" required placeholder="https://provider.example/get.php?..." autocomplete="off">
             <label for="epg">XMLTV EPG URL <small>(optional)</small></label>
             <input id="epg" name="epg" type="url" placeholder="https://provider.example/guide.xml" autocomplete="off">
+            <label class="check"><input type="checkbox" name="vod" value="1" checked> Also index movies &amp; series (VOD)</label>
             <button type="submit">Send to TV</button>
           </form>
           <p><small>M3U, M3U8 and Xtream get.php links are accepted. Keep this page open until the TV confirms.</small></p>

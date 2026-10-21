@@ -56,6 +56,7 @@ import dev.matchday.tv.design.MetaChip
 import dev.matchday.tv.design.RemoteBadge
 import dev.matchday.tv.design.SectionLabel
 import dev.matchday.tv.design.SportIcon
+import dev.matchday.tv.design.activationClick
 import dev.matchday.tv.feature.live.PlayableChannel
 import org.koin.androidx.compose.koinViewModel
 import java.time.Instant
@@ -222,7 +223,7 @@ fun SportsScreen(
                         onFocus = { selectedId = it.id },
                         onOpen = { event ->
                             selectedId = event.id
-                            vm.findChannels(event)
+                            vm.openMatch(event)
                             showMatches = true
                         },
                     )
@@ -275,7 +276,7 @@ fun SportsScreen(
                                     onFocused = { selectedId = event.id },
                                     onClick = {
                                         selectedId = event.id
-                                        vm.findChannels(event)
+                                        vm.openMatch(event)
                                         showMatches = true
                                     },
                                     modifier = Modifier.weight(1f),
@@ -290,20 +291,19 @@ fun SportsScreen(
     }
 
     if (showMatches && selected != null) {
-        val matches = state.matches[selected.id].orEmpty()
         MatchDialog(
             event = selected,
-            matches = matches,
-            loading = state.matchingEventId == selected.id,
-            error = state.matchError,
+            listing = state.listings[selected.id].orEmpty(),
+            lookupLoading = state.lookupEventId == selected.id,
+            lookupFailure = state.lookupFailures[selected.id],
+            deepMatches = state.matches[selected.id].orEmpty(),
+            deepLoading = state.matchingEventId == selected.id,
+            deepError = state.matchError,
             onDismiss = { showMatches = false },
-            onPlay = { chosen ->
+            onDeepMatch = { vm.findChannels(selected) },
+            onPlay = { chosen, rest ->
                 showMatches = false
-                onPlay(
-                    listOf(chosen) + matches
-                        .filterNot { it.channel.id == chosen.channel.id }
-                        .map { it.playable() },
-                )
+                onPlay(listOf(chosen) + rest)
             },
         )
     }
@@ -321,8 +321,8 @@ private fun SportsHeader(
         Text("Sports Hub", style = LocalMatchdayType.current.title.copy(fontSize = 30.sp), color = MatchdayColors.Ivory)
         Spacer(Modifier.width(30.dp))
         HeaderTab("Scores", selected = true)
-        Spacer(Modifier.width(22.dp))
-        HeaderTab("Channels", selected = false, onClick = onOpenChannels)
+        // The old "Channels" tab opened the Live TV section; that section is
+        // parked, so the tab is gone. (onOpenChannels is kept for a comeback.)
         Spacer(Modifier.weight(1f))
         Text(
             text = "$liveCount live · $count scheduled",
@@ -349,15 +349,7 @@ private fun HeaderTab(label: String, selected: Boolean, onClick: () -> Unit = {}
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickable(onClick = onClick)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else false
-            }
+            .activationClick(onClick)
             .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -405,15 +397,7 @@ private fun SportChip(label: String, iconKey: String, selected: Boolean, onClick
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickable(onClick = onClick)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else false
-            }
+            .activationClick(onClick)
             .background(
                 when {
                     focused -> MatchdayColors.Ivory
@@ -477,15 +461,7 @@ private fun LeagueChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickable(onClick = onClick)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else false
-            }
+            .activationClick(onClick)
             .background(
                 when {
                     focused -> MatchdayColors.Ivory
@@ -897,11 +873,15 @@ private fun teamColor(seed: Int): Color {
 @Composable
 private fun MatchDialog(
     event: ScheduleEvent,
-    matches: List<dev.matchday.tv.data.MatchedChannel>,
-    loading: Boolean,
-    error: String?,
+    listing: List<dev.matchday.tv.data.SuggestedRow>,
+    lookupLoading: Boolean,
+    lookupFailure: String?,
+    deepMatches: List<dev.matchday.tv.data.MatchedChannel>,
+    deepLoading: Boolean,
+    deepError: String?,
     onDismiss: () -> Unit,
-    onPlay: (PlayableChannel) -> Unit,
+    onPlay: (PlayableChannel, List<PlayableChannel>) -> Unit,
+    onDeepMatch: () -> Unit,
 ) {
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
@@ -913,10 +893,24 @@ private fun MatchDialog(
     ) {
         BackHandler(onBack = onDismiss)
         val first = remember { androidx.compose.ui.focus.FocusRequester() }
-        LaunchedEffect(matches, loading) {
-            if (!loading && matches.isNotEmpty()) {
+        LaunchedEffect(listing, deepMatches, lookupLoading, deepLoading) {
+            if (!lookupLoading && !deepLoading) {
                 kotlinx.coroutines.delay(100)
                 runCatching { first.requestFocus() }
+            }
+        }
+        // Every matched user channel appears in the fallback playlist in ranking order.
+        val fallthrough = remember(listing, deepMatches) {
+            val seen = HashSet<Long>()
+            buildList {
+                listing.forEach { row ->
+                    row.channels.forEach { channel ->
+                        if (seen.add(channel.id)) add(PlayableChannel(channel, null, null))
+                    }
+                }
+                deepMatches.forEach { match ->
+                    if (seen.add(match.channel.id)) add(match.playable())
+                }
             }
         }
         Box(
@@ -953,69 +947,241 @@ private fun MatchDialog(
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(
-                    text = "${time(event.startMs)}  ·  ${event.broadcaster ?: "No broadcaster listed"}  ·  ${matches.size} candidate channels",
+                    text = "${time(event.startMs)}  ·  ${event.broadcaster ?: "No broadcaster listed"}  ·  Broadcast data by LiveSoccerTV",
                     style = LocalMatchdayType.current.meta,
                     color = MatchdayColors.Muted,
                 )
                 Spacer(Modifier.height(16.dp))
+                val playRow: (PlayableChannel) -> Unit = { chosen ->
+                    onPlay(chosen, fallthrough.filterNot { it.channel.id == chosen.channel.id })
+                }
                 when {
-                    loading -> Text("Matching your channels…", style = LocalMatchdayType.current.body, color = MatchdayColors.Muted)
-                    error != null -> Text("Match failed: $error", style = LocalMatchdayType.current.body, color = MatchdayColors.Brick)
-                    matches.isEmpty() -> Text(
-                        "No channel matched this event above the display threshold. The guide and channel names are the only signals; Matchday will not guess a random stream.",
+                    lookupLoading -> Text(
+                        "Looking up broadcasters…",
                         style = LocalMatchdayType.current.body,
                         color = MatchdayColors.Muted,
-                        modifier = Modifier.width(800.dp),
+                    )
+                    listing.isEmpty() -> NoSuggestions(
+                        event = event,
+                        lookupFailure = lookupFailure,
+                        deepMatches = deepMatches,
+                        deepLoading = deepLoading,
+                        deepError = deepError,
+                        onPlayRow = playRow,
+                        onDeepMatch = onDeepMatch,
                     )
                     else -> LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(5.dp),
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
-                        items(matches, key = { it.channel.id }) { match ->
-                            FocusableSurface(
-                                onClick = { onPlay(match.playable()) },
-                                onFocused = {},
-                                modifier = if (match == matches.first()) Modifier.focusRequester(first) else Modifier,
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    RemoteBadge(match.channel.name, match.channel.logoUrl, 30.dp)
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) {
+                        var previousCountry = ""
+                        var firstInteractiveSeen = false
+                        listing.forEach { row ->
+                            if (row.broadcast.country != previousCountry) {
+                                previousCountry = row.broadcast.country
+                                item(key = "country:$previousCountry") {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = match.channel.name,
-                                            style = LocalMatchdayType.current.subtitle.copy(fontSize = 16.sp),
-                                            color = MatchdayColors.Ivory,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                            text = previousCountry.uppercase(),
+                                            style = LocalMatchdayType.current.label.copy(fontSize = 11.sp, letterSpacing = 1.1.sp),
+                                            color = MatchdayColors.Brick,
                                         )
-                                        Text(
-                                            text = match.match.reasons.joinToString(" · "),
-                                            style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
-                                            color = MatchdayColors.Dim,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    match.source?.let { MetaChip(it.name) }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "${(match.match.confidence * 100).toInt()}%",
-                                        style = LocalMatchdayType.current.label.copy(fontSize = 11.sp),
-                                        color = if (match.match.autoPlayEligible) MatchdayColors.Pitch else MatchdayColors.Muted,
-                                    )
-                                    if (match.match.autoPlayEligible) {
                                         Spacer(Modifier.width(8.dp))
-                                        MetaChip("AUTO", accent = true)
+                                        Text(
+                                            text = tierLabel(row.broadcast.tier),
+                                            style = LocalMatchdayType.current.meta.copy(fontSize = 10.sp),
+                                            color = MatchdayColors.Dim,
+                                        )
                                     }
                                 }
                             }
+                            val focusTarget = row.channels.isNotEmpty() && !firstInteractiveSeen
+                            if (focusTarget) firstInteractiveSeen = true
+                            item(key = "broadcast:${row.broadcast.country}:${row.broadcast.channelName}") {
+                                BroadcastRowPanel(row, if (focusTarget) Modifier.focusRequester(first) else null, playRow)
+                            }
+                        }
+                        item(key = "deep-section") {
+                            DeepSection(deepMatches, deepLoading, deepError, playRow, onDeepMatch)
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun BroadcastRowPanel(
+    row: dev.matchday.tv.data.SuggestedRow,
+    focusModifier: Modifier?,
+    onPlayRow: (PlayableChannel) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = row.broadcast.channelName,
+            style = LocalMatchdayType.current.meta.copy(fontSize = 12.sp),
+            color = MatchdayColors.Dim,
+        )
+        Spacer(Modifier.height(4.dp))
+        if (row.channels.isEmpty()) {
+            Text(
+                text = "not in your sources",
+                style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
+                color = MatchdayColors.Dim.copy(alpha = 0.6f),
+            )
+        } else {
+            row.channels.forEachIndexed { index, channel ->
+                FocusableSurface(
+                    onClick = { onPlayRow(PlayableChannel(channel, null, null)) },
+                    onFocused = {},
+                    modifier = if (index == 0 && focusModifier != null) focusModifier else Modifier,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RemoteBadge(channel.name, channel.logoUrl, 30.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = dev.matchday.domain.catalog.NameNormalizer.display(channel.name),
+                            style = LocalMatchdayType.current.subtitle.copy(fontSize = 16.sp),
+                            color = MatchdayColors.Ivory,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "via ${row.broadcast.channelName}",
+                            style = LocalMatchdayType.current.meta.copy(fontSize = 10.sp),
+                            color = MatchdayColors.Dim,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeepSection(
+    deepMatches: List<dev.matchday.tv.data.MatchedChannel>,
+    deepLoading: Boolean,
+    deepError: String?,
+    onPlayRow: (PlayableChannel) -> Unit,
+    onDeepMatch: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MatchdayColors.CardLine))
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "GUIDE MATCH",
+            style = LocalMatchdayType.current.label.copy(fontSize = 11.sp, letterSpacing = 1.1.sp),
+            color = MatchdayColors.Brick,
+        )
+        Spacer(Modifier.height(6.dp))
+        when {
+            deepLoading -> Text(
+                "Deep matching your guide…",
+                style = LocalMatchdayType.current.body,
+                color = MatchdayColors.Muted,
+            )
+            deepError != null -> Text(
+                "Deep match failed: $deepError",
+                style = LocalMatchdayType.current.meta,
+                color = MatchdayColors.Brick,
+            )
+            deepMatches.isEmpty() -> Text(
+                text = "Final-hope search scans titles of your guide for this fixture.",
+                style = LocalMatchdayType.current.meta,
+                color = MatchdayColors.Dim,
+            )
+            else -> Text(
+                text = "${deepMatches.size} candidate channel(s) from your guide:",
+                style = LocalMatchdayType.current.meta,
+                color = MatchdayColors.Muted,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        if (!deepLoading) {
+            FocusableSurface(
+                onClick = onDeepMatch,
+                shape = RoundedCornerShape(50),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = "Search guide & EPG",
+                    style = LocalMatchdayType.current.label.copy(fontSize = 10.sp),
+                    color = MatchdayColors.Ivory,
+                )
+            }
+        }
+        deepMatches.forEach { match ->
+            Spacer(Modifier.height(4.dp))
+            FocusableSurface(
+                onClick = { onPlayRow(match.playable()) },
+                onFocused = {},
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RemoteBadge(match.channel.name, match.channel.logoUrl, 28.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = match.channel.name,
+                            style = LocalMatchdayType.current.subtitle.copy(fontSize = 15.sp),
+                            color = MatchdayColors.Ivory,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = match.match.reasons.joinToString(" · "),
+                            style = LocalMatchdayType.current.meta.copy(fontSize = 10.sp),
+                            color = MatchdayColors.Dim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (match.match.autoPlayEligible) MetaChip("AUTO", accent = true)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoSuggestions(
+    event: ScheduleEvent,
+    lookupFailure: String?,
+    deepMatches: List<dev.matchday.tv.data.MatchedChannel>,
+    deepLoading: Boolean,
+    deepError: String?,
+    onPlayRow: (PlayableChannel) -> Unit,
+    onDeepMatch: () -> Unit,
+) {
+    Column(Modifier.width(840.dp)) {
+        Text(
+            text = when {
+                lookupFailure != null -> "No broadcaster listing found for this fixture."
+                event.sportId != "football" -> "Broadcast listings cover football only."
+                else -> "No broadcaster options came back for this fixture."
+            },
+            style = LocalMatchdayType.current.body,
+            color = MatchdayColors.Muted,
+        )
+        Spacer(Modifier.height(12.dp))
+        DeepSection(deepMatches, deepLoading, deepError, onPlayRow, onDeepMatch)
+    }
+}
+
+private fun tierLabel(tier: Int): String = when (tier) {
+    1 -> "UK"
+    2 -> "US"
+    3 -> "FR"
+    4 -> "ARABIC"
+    5 -> "GERMAN"
+    else -> "OTHER"
 }

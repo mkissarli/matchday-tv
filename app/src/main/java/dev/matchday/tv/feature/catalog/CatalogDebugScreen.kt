@@ -42,6 +42,7 @@ import dev.matchday.tv.design.FocusableSurface
 import dev.matchday.tv.design.LocalMatchdayType
 import dev.matchday.tv.design.MatchdayColors
 import dev.matchday.tv.design.MetaChip
+import dev.matchday.tv.design.activationClick
 import org.koin.androidx.compose.koinViewModel
 
 private const val ALL = "__all__"
@@ -168,16 +169,7 @@ private fun DebugCategoryRow(label: String, count: Int, selected: Boolean, onCli
             .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
+            .activationClick(onClick)
             .background(
                 when {
                     focused -> MatchdayColors.Ivory

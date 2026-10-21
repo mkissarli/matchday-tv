@@ -20,6 +20,7 @@ import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.epg.EpgSourceStore
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.setup.SourceImporter
+import tv.own.owntv.core.sync.SyncScopeChoice
 import tv.own.owntv.core.sync.work.EpgSyncScheduler
 import tv.own.owntv.core.util.FriendlySyncFailure
 
@@ -77,8 +78,8 @@ class SettingsViewModel(
         _state.update { it.copy(setup = null) }
     }
 
-    fun importManual(name: String, url: String, epgUrl: String) {
-        importSource(SetupPayload(name, url, epgUrl))
+    fun importManual(name: String, url: String, epgUrl: String, includeVod: Boolean = true) {
+        importSource(SetupPayload(name, url, epgUrl, includeVod = includeVod))
     }
 
     fun setMaxTier(tier: QualityTier) {
@@ -158,6 +159,8 @@ class SettingsViewModel(
             name = payload.name.ifBlank { "Playlist" },
             url = payload.playlistUrl.trim(),
             epgUrl = payload.epgUrl.orEmpty().trim(),
+            movies = if (payload.includeVod) SyncScopeChoice.Now else SyncScopeChoice.Off,
+            series = if (payload.includeVod) SyncScopeChoice.Now else SyncScopeChoice.Off,
             makeDefault = true,
         )
         val guideUrl = payload.epgUrl?.trim().orEmpty()

@@ -11,14 +11,19 @@ android {
         applicationId = "dev.matchday.tv"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
 
         ndk {
             // Fire OS 7 sticks are 32-bit; Google TV devices may be arm64.
             // The x86_64 emulator ABI is added only to the debug variant below.
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
+    }
+
+    // JVM unit tests may call android.util.Log; they only need the return values.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     signingConfigs {

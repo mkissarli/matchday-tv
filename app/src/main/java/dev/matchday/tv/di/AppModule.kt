@@ -1,5 +1,6 @@
 package dev.matchday.tv.di
 
+import dev.matchday.tv.data.BroadcastLookup
 import dev.matchday.tv.data.CompositeScheduleProvider
 import dev.matchday.tv.data.EspnMultiSportProvider
 import dev.matchday.tv.data.EspnSoccerProvider
@@ -37,6 +38,7 @@ val appModule = module {
     single { ScheduleCache(androidContext().filesDir.resolve("schedule-cache.json")) }
     single { PlaybackPreferences(androidContext()) }
     single { MatchRepository(get(), get(), get(), get()) }
+    single { BroadcastLookup(get()) }
     viewModelOf(::LiveViewModel)
     viewModelOf(::GuideViewModel)
     viewModelOf(::SportsViewModel)

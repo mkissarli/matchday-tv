@@ -38,6 +38,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 
+private val ACTIVATION_KEYS = setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar)
+
+/**
+ * Activate on D-pad OK / Enter as soon as the key goes down, and swallow the
+ * matching key-up so the paired [clickable] cannot register a second click.
+ * Without consuming the up event one remote press could act as two activations
+ * (or leak into whatever gains focus right after the click).
+ */
+fun Modifier.activationClick(onClick: () -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        when {
+            event.type == KeyEventType.KeyDown && event.key in ACTIVATION_KEYS -> {
+                onClick()
+                true
+            }
+            event.key in ACTIVATION_KEYS -> true
+            else -> false
+        }
+    }
+
 @Composable
 fun FocusableSurface(
     onClick: () -> Unit,
@@ -61,17 +81,7 @@ fun FocusableSurface(
                 if (it.isFocused) onFocused()
             }
             .focusable()
-            .clickable(onClick = onClick)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
+            .activationClick(onClick)
             .background(
                 if (focused) MatchdayColors.SurfaceRaised else MatchdayColors.Surface,
                 shape,
@@ -162,7 +172,7 @@ fun TopBar(
                 color = MatchdayColors.Ivory,
             )
             Text(
-                text = "SPORT  ·  LIVE TV  ·  YOUR SOURCES",
+                text = "SPORT  ·  YOUR SOURCES",
                 style = LocalMatchdayType.current.label.copy(fontSize = 9.sp, letterSpacing = 1.4.sp),
                 color = MatchdayColors.Dim,
             )
@@ -172,7 +182,8 @@ fun TopBar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(end = 12.dp),
         ) {
-            items(NavDestination.entries) { destination ->
+            // Live TV is parked: hidden from the nav, code kept for a comeback.
+            items(NAV_DESTINATIONS) { destination ->
                 NavPill(
                     label = destination.label,
                     selected = destination == selected,
@@ -191,17 +202,7 @@ private fun NavPill(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clickable(onClick = onClick)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
+            .activationClick(onClick)
             .background(
                 when {
                     focused -> MatchdayColors.Ivory
@@ -239,6 +240,9 @@ enum class NavDestination(val label: String) {
     GUIDE("Guide"),
     SETTINGS("Settings"),
 }
+
+/** Nav shows Sports / Guide / Settings; Live TV is parked (code stays). */
+val NAV_DESTINATIONS = listOf(NavDestination.SPORTS, NavDestination.GUIDE, NavDestination.SETTINGS)
 
 @Composable
 fun MediaPreview(

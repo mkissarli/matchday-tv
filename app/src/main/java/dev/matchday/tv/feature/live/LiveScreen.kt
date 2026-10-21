@@ -55,6 +55,7 @@ import dev.matchday.tv.design.MediaPreview
 import dev.matchday.tv.design.MetaChip
 import dev.matchday.tv.design.RemoteBadge
 import dev.matchday.tv.design.SectionLabel
+import dev.matchday.tv.design.activationClick
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
@@ -236,16 +237,7 @@ private fun CategoryRow(category: BrowseCategory, selected: Boolean, onClick: ()
             .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.Spacebar)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
+            .activationClick(onClick)
             .background(
                 when {
                     focused -> MatchdayColors.Ivory

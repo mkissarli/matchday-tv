@@ -90,7 +90,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
                 AddSourceCard(
                     state = state,
-                    onImport = vm::importManual,
+                    onImport = { name, url, epg, vod -> vm.importManual(name, url, epg, vod) },
                 )
             }
             Column(Modifier.weight(0.85f)) {
@@ -198,10 +198,11 @@ private fun PhoneSetupCard(state: SettingsUiState, onRestart: () -> Unit) {
 }
 
 @Composable
-private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, String) -> Unit) {
+private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, String, Boolean) -> Unit) {
     var name by rememberSaveable { mutableStateOf("My playlist") }
     var url by rememberSaveable { mutableStateOf(if (BuildConfig.DEBUG) "http://10.0.2.2:8088/playlist.m3u" else "") }
     var epg by rememberSaveable { mutableStateOf("") }
+    var includeVod by rememberSaveable { mutableStateOf(true) }
 
     Column(Modifier.card()) {
         SectionLabel("ADD A SOURCE")
@@ -229,9 +230,11 @@ private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, Str
             last = true,
         )
         Spacer(Modifier.height(12.dp))
+        VodToggle(includeVod) { includeVod = it }
+        Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             FocusableSurface(
-                onClick = { onImport(name, url, epg) },
+                onClick = { onImport(name, url, epg, includeVod) },
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
             ) {
@@ -254,6 +257,40 @@ private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, Str
             Spacer(Modifier.height(8.dp))
             Text(error, style = LocalMatchdayType.current.meta, color = MatchdayColors.Brick)
         }
+    }
+}
+
+/** "Also index movies & series" — off, the import is live-channels only (faster, matches the app's focus). */
+@Composable
+private fun VodToggle(checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        FocusableSurface(
+            onClick = { onChecked(!checked) },
+            shape = RoundedCornerShape(50),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp),
+        ) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    text = if (checked) "✓" else "—",
+                    style = LocalMatchdayType.current.subtitle,
+                    color = if (checked) MatchdayColors.Pitch else MatchdayColors.Muted,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Include VOD (movies & series)",
+                    style = LocalMatchdayType.current.meta.copy(fontSize = 13.sp),
+                    color = MatchdayColors.Ivory,
+                )
+            }
+        }
+        Text(
+            text = "Untick for a live-sports-only import.",
+            style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
+            color = MatchdayColors.Dim,
+        )
     }
 }
 

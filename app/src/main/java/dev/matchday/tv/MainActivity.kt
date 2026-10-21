@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -110,15 +111,20 @@ private fun MatchdayRoot(debugUrl: String?) {
                 .fillMaxSize()
                 .padding(horizontal = 44.dp, vertical = 22.dp),
         ) {
+            // Live TV is parked: skip any restored "Live TV" destination.
+            LaunchedEffect(Unit) {
+                if (destination == NavDestination.LIVE) destination = NavDestination.SPORTS
+            }
             TopBar(
-                selected = destination,
+                selected = if (destination == NavDestination.LIVE) NavDestination.SPORTS else destination,
                 onSelect = { destination = it },
             )
             Spacer(Modifier.height(16.dp))
             when (destination) {
                 NavDestination.SPORTS -> SportsScreen(
                     onPlay = { queue = it },
-                    onOpenChannels = { destination = NavDestination.LIVE },
+                    // The old side-door into Live TV; the code stays for a comeback.
+                    onOpenChannels = {},
                     modifier = Modifier.weight(1f),
                 )
                 NavDestination.LIVE -> LiveScreen(

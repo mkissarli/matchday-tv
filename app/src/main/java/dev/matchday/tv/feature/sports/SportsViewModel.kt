@@ -8,9 +8,11 @@ import dev.matchday.domain.schedule.ScheduleQuery
 import dev.matchday.domain.schedule.ScheduleStatus
 import dev.matchday.domain.schedule.SportRegistry
 import dev.matchday.domain.schedule.SportRegistryEntry
+import dev.matchday.tv.data.BroadcastLookup
 import dev.matchday.tv.data.MatchRepository
 import dev.matchday.tv.data.MatchedChannel
 import dev.matchday.tv.data.ScheduleCache
+import dev.matchday.tv.data.SuggestedRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,12 +33,17 @@ data class SportsUiState(
     val matches: Map<String, List<MatchedChannel>> = emptyMap(),
     val matchError: String? = null,
     val fromCache: Boolean = false,
+    // Per-fixture broadcaster suggestions (LiveSoccerTV service lookup).
+    val lookupEventId: String? = null,
+    val listings: Map<String, List<SuggestedRow>> = emptyMap(),
+    val lookupFailures: Map<String, String> = emptyMap(),
 )
 
 class SportsViewModel(
     private val provider: FixtureProvider,
     private val matcher: MatchRepository,
     private val cache: ScheduleCache,
+    private val broadcastLookup: BroadcastLookup,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SportsUiState(attribution = provider.attribution))
@@ -139,6 +146,47 @@ class SportsViewModel(
                 .onFailure { error ->
                     _state.update { it.copy(matchingEventId = null, matchError = error.message ?: error.javaClass.simpleName) }
                 }
+        }
+    }
+
+    /**
+     * Opens the match channels sheet: broadcaster suggestions first (fast service
+     * lookup, ranked UK -> US -> FR -> Arabic -> DE), with the guide/EPG deep
+     * matcher as the final hope when the service has nothing for the fixture.
+     */
+    fun openMatch(event: ScheduleEvent) {
+        if (event.sportId == "football") {
+            if (event.id in _state.value.listings && _state.value.listings[event.id] != null) return
+            if (_state.value.lookupEventId == event.id) return
+            viewModelScope.launch { lookupBroadcasts(event) }
+        } else {
+            // The broadcaster service covers football only.
+            if (event.id !in _state.value.matches) findChannels(event)
+        }
+    }
+
+    private suspend fun lookupBroadcasts(event: ScheduleEvent) {
+        _state.update { it.copy(lookupEventId = event.id) }
+        val listing = runCatching { broadcastLookup.lookup(event) }.getOrNull()
+        if (listing == null) {
+            _state.update {
+                it.copy(
+                    lookupEventId = null,
+                    lookupFailures = it.lookupFailures + (event.id to "no broadcaster listing"),
+                )
+            }
+            // Final hope: the deep guide matcher.
+            if (event.id !in _state.value.matches && _state.value.matchingEventId == null) {
+                findChannels(event)
+            }
+            return
+        }
+        val rows = runCatching { matcher.enrich(listing) }.getOrDefault(emptyList())
+        _state.update {
+            it.copy(
+                lookupEventId = null,
+                listings = it.listings + (event.id to rows),
+            )
         }
     }
 }

@@ -34,12 +34,92 @@ data class MatchedChannel(
     )
 }
 
+/** One broadcast channel suggestion, with the user's own channels it matches. */
+data class SuggestedRow(
+    val broadcast: BroadcastChannel,
+    val channels: List<ChannelEntity>,
+)
+
+/**
+ * Pure broadcast-channel → user-channel name matching. Lives separately from
+ * [MatchRepository] so it can be unit-tested without a database.
+ */
+internal object ChannelScorer {
+
+    class ChannelEntry(val channel: ChannelEntity) {
+        private val normalized = NameNormalizer.normalize(channel.name)
+        val compact = normalized.replace(" ", "")
+        val tokens = normalized.split(' ').filter { it.isNotBlank() }.toSet()
+        val digits = DIGITS.findAll(normalized).map { it.value }.toSet()
+    }
+
+    class BroadcastKey(raw: String) {
+        private val normalized = NameNormalizer.normalize(raw)
+        val compact = normalized.replace(" ", "")
+        val tokens = normalized.split(' ').filter { it.isNotBlank() }.toSet()
+        val digits = DIGITS.findAll(normalized).map { it.value }.toSet()
+    }
+
+    fun score(broadcast: BroadcastKey, entry: ChannelEntry): Int? {
+        if (broadcast.compact.length < 3) return null
+        // "TNT Sports 1" must never match "TNT Sports 2", but a numberless
+        // "TNT Sports" copy is acceptable.
+        if (broadcast.digits.isNotEmpty() && entry.digits.isNotEmpty() &&
+            broadcast.digits.intersect(entry.digits).isEmpty()
+        ) return null
+        val contained = entry.compact.contains(broadcast.compact) ||
+            (broadcast.compact.contains(entry.compact) && entry.compact.length >= 3)
+        // Tokens match exactly or as a stem ("Sky Sport" ↔ "Sky Sports").
+        val tokenOverlap = broadcast.tokens.count { t ->
+            entry.tokens.any { u -> u == t || (t.length >= 4 && u.startsWith(t)) || (u.length >= 4 && t.startsWith(u)) }
+        }
+        val tokenAll = broadcast.tokens.isNotEmpty() && tokenOverlap == broadcast.tokens.size
+        if (!contained && !tokenAll) return null
+        return when {
+            entry.compact == broadcast.compact -> 0
+            contained -> 1
+            else -> 2
+        }
+    }
+
+    private val DIGITS = Regex("""\d+""")
+}
+
 class MatchRepository(
     private val settings: SettingsRepository,
     private val sourceDao: SourceDao,
     private val channelDao: ChannelDao,
     private val epgDao: EpgDao,
 ) {
+
+    /**
+     * Name-search the user's playlist for each broadcast channel a listing
+     * reports. Pure dictionary work: no EPG probe, no network, instant.
+     */
+    suspend fun enrich(
+        listing: BroadcastListing,
+        maxPerRow: Int = 6,
+    ): List<SuggestedRow> = withContext(Dispatchers.IO) {
+        val profileId = settings.activeProfileIdNow()
+        if (profileId < 0) return@withContext emptyList()
+        val sourceIds = sourceDao.sourceIdsForProfile(profileId)
+        if (sourceIds.isEmpty()) return@withContext emptyList()
+        val index = channelDao.snapshotAll(sourceIds, CHANNEL_SNAPSHOT_LIMIT)
+            .map { ChannelScorer.ChannelEntry(it) }
+        listing.channels.map { broadcast ->
+            val key = ChannelScorer.BroadcastKey(broadcast.channelName)
+            val matched = index.mapNotNull { entry ->
+                ChannelScorer.score(key, entry)?.let { score -> score * SCORE_SCALE + rank(entry) to entry.channel }
+            }
+                .sortedBy { it.first }
+                .take(maxPerRow)
+                .map { it.second }
+            SuggestedRow(broadcast, matched)
+        }
+    }
+
+    private fun rank(entry: ChannelScorer.ChannelEntry): Int =
+        NameNormalizer.quality(entry.channel.name).tier.rank * 100 + entry.compact.length
 
     suspend fun find(
         event: ScheduleEvent,
@@ -129,3 +209,5 @@ class MatchRepository(
 }
 
 private const val CHANNEL_SNAPSHOT_LIMIT = 60_000
+private const val SCORE_SCALE = 10_000
+private val DIGITS = Regex("""\d+""")
