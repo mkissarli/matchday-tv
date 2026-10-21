@@ -60,7 +60,45 @@ Available URLs from the emulator:
 | `http://10.0.2.2:8088/fault/slow` | Throttled stream |
 | `http://10.0.2.2:8088/fault/drop` | Closes mid-stream |
 
-## 4. Import the playlist
+## 4. Import a real playlist
+
+Matchday imports from a **URL**, not from a file picker.
+
+### Remote M3U/Xtream URL
+
+Use **Settings → Add a source**, or the empty Live TV state, and paste the provider URL.
+For Xtream providers, use the panel's `get.php` M3U export link, for example:
+
+```text
+http://provider.example:8080/get.php?username=USER&password=PASS&type=m3u_plus&output=ts
+```
+
+The importer detects Xtream `get.php` links automatically. Add the provider's XMLTV
+URL in the optional EPG field.
+
+### A playlist file on this PC
+
+Serve the folder containing the `.m3u` file over HTTP so the emulator can reach it:
+
+```powershell
+cd C:\path\to\playlist-folder
+python -m http.server 8090
+```
+
+Then import:
+
+```text
+http://10.0.2.2:8090/my-playlist.m3u
+```
+
+`10.0.2.2` is the emulator's alias for the host PC. If the M3U refers to local media
+files, serve those from the same folder. If it contains `127.0.0.1` stream URLs, replace
+those with `10.0.2.2` so the emulator does not look for the stream inside itself.
+
+For a real TV, use the TV's LAN IP instead of `10.0.2.2`, or use
+`adb reverse tcp:8090 tcp:8090` and `http://127.0.0.1:8090/...`.
+
+### Synthetic test playlist
 
 In **Live TV**, the empty state is pre-filled with the emulator URL in debug builds.
 Press **Import playlist**.
