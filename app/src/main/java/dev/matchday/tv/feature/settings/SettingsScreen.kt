@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -28,7 +29,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -217,12 +226,12 @@ private fun AddSourceCard(state: SettingsUiState, onImport: (String, String, Str
             onValueChange = { epg = it },
             label = "XMLTV EPG URL · optional",
             keyboardType = KeyboardType.Uri,
+            last = true,
         )
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             FocusableSurface(
                 onClick = { onImport(name, url, epg) },
-                selected = true,
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
             ) {
@@ -366,9 +375,12 @@ private fun SettingsField(
     onValueChange: (String) -> Unit,
     label: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** The final field of a card: its "next" action hands focus to the button below instead. */
+    last: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
+    val focusManager = LocalFocusManager.current
     Column {
         Text(
             text = label.uppercase(),
@@ -379,6 +391,21 @@ private fun SettingsField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                // Text fields swallow D-pad presses for their own text cursor, which on a remote
+                // makes the Import button unreachable. Escaping up/down here takes it back to the
+                // focus search before the field sees it.
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown &&
+                        (event.key == Key.DirectionDown || event.key == Key.DirectionUp)
+                    ) {
+                        focusManager.moveFocus(
+                            if (event.key == Key.DirectionDown) FocusDirection.Down else FocusDirection.Up,
+                        )
+                        true
+                    } else {
+                        false
+                    }
+                }
                 .background(MatchdayColors.Ink, RoundedCornerShape(7.dp))
                 .border(
                     if (focused) 2.dp else 1.dp,
@@ -392,7 +419,14 @@ private fun SettingsField(
                 onValueChange = onValueChange,
                 singleLine = true,
                 textStyle = LocalMatchdayType.current.meta.copy(color = MatchdayColors.Ivory, fontSize = 14.sp),
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = keyboardType,
+                    imeAction = if (last) ImeAction.Done else ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    onDone = { focusManager.moveFocus(FocusDirection.Down) },
+                ),
                 interactionSource = interactionSource,
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { inner ->

@@ -1,3 +1,7 @@
 [submodule "third_party/owntv-core"]
 	path = third_party/owntv-core
-	url = https://github.com/ahXN00/OwnTV_Core.git
+	url = https://github.com/mkissarli/OwnTV_Core.git
+	# Matchday's own release fork of ahXN00/OwnTV_Core; the matchday-diagnostics
+	# branch carries import-diagnostics fixes on top of the published 1.0.68 tag
+	# (c14e944b Release core-1.0.68) and is what the composite build compiles.
+	branch = matchday-diagnostics

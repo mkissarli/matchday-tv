@@ -78,19 +78,32 @@ class SportsViewModel(
                     .filter { it.status != ScheduleStatus.CANCELLED }
                     .sortedBy { it.startMs }
             }.onSuccess { events ->
-                if (events.isNotEmpty()) {
-                    withContext(Dispatchers.IO) { cache.save(events) }
+                val now = System.currentTimeMillis()
+                val previous = _state.value.events
+                // A partial refresh (one free provider rate-limited) must not erase a whole
+                // sport we already had. Keep cached events for sports missing from this run.
+                val freshSports = events.map { it.sportId }.toSet()
+                val preserve = previous.filter { event ->
+                    event.sportId !in freshSports &&
+                        (event.endMs ?: event.startMs) >= now - 2 * 60 * 60_000L &&
+                        event.startMs <= now + 7 * 24 * 60 * 60_000L
+                }
+                val merged = (events + preserve)
+                    .distinctBy { it.id }
+                    .sortedBy { it.startMs }
+                if (merged.isNotEmpty()) {
+                    withContext(Dispatchers.IO) { cache.save(merged) }
                 }
                 _state.update {
-                    val keepCached = events.isEmpty() && it.events.isNotEmpty()
-                    val visible = if (keepCached) it.events else events
+                    val keepCached = merged.isEmpty() && it.events.isNotEmpty()
+                    val visible = if (keepCached) it.events else merged
                     it.copy(
                         loading = false,
                         error = null,
                         events = visible,
                         sports = visibleSports(visible),
                         attribution = provider.attribution,
-                        updatedAtMs = if (keepCached) it.updatedAtMs else System.currentTimeMillis(),
+                        updatedAtMs = if (keepCached) it.updatedAtMs else now,
                         fromCache = keepCached,
                     )
                 }

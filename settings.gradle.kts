@@ -28,4 +28,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "Matchday"
 include(":app")
+
+// OwnTV Core is consumed from the same-directory GPLv3 checkout as a composite build: its
+// group:name (tv.own.owntv:core / :player-core) matches the catalog coordinates, so Gradle
+// substitutes the published 1.0.68 artifact with the local source — keeping the tree the
+// single source of truth for Matchday build reproducibility. See THIRD_PARTY_NOTICES.md.
+includeBuild("third_party/owntv-core")
 include(":domain")

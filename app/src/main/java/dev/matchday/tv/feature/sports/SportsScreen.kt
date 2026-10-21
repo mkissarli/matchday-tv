@@ -1,5 +1,6 @@
 package dev.matchday.tv.feature.sports
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +46,7 @@ import dev.matchday.domain.schedule.ScheduleEvent
 import dev.matchday.domain.schedule.LeaguePopularity
 import dev.matchday.domain.schedule.SportRegistry
 import dev.matchday.domain.schedule.SportRegistryEntry
+import dev.matchday.domain.schedule.TeamPopularity
 import dev.matchday.tv.design.EmptyState
 import dev.matchday.tv.design.FocusableSurface
 import dev.matchday.tv.design.LocalMatchdayType
@@ -95,7 +97,16 @@ fun SportsScreen(
         if (selectedLeague != null && selectedLeague !in leagueOptions) selectedLeague = null
     }
     val orderedEvents = remember(visibleEvents) {
-        visibleEvents.sortedWith(compareBy({ sportRank(it.sportId) }, { it.startMs }))
+        visibleEvents.sortedWith(
+            compareBy(
+                { sportRank(it.sportId) },
+                { event ->
+                    // Within tennis, put the biggest names first; other sports stay chronological.
+                    if (event.sportId == "tennis") -TeamPopularity.boost(event.participants) else 0
+                },
+                { it.startMs },
+            ),
+        )
     }
     LaunchedEffect(orderedEvents) {
         if (orderedEvents.none { it.id == selectedId }) selectedId = orderedEvents.firstOrNull()?.id
@@ -120,23 +131,29 @@ fun SportsScreen(
             compareBy(
                 { event ->
                     val liveBump = if (isLive(event)) 8 else 0
-                    LeaguePopularity.rank(eventLabel(event)) - liveBump
+                    LeaguePopularity.rank(eventLabel(event)) - liveBump -
+                        TeamPopularity.boost(event.participants)
                 },
                 { it.startMs },
             ),
         )
-        val picked = LinkedHashMap<String, ScheduleEvent>()
+        val picked = ArrayList<ScheduleEvent>(3)
+        val usedTeams = HashSet<String>()
         candidates.forEach { event ->
-            if (picked.size < 3) picked.putIfAbsent(eventLabel(event), event)
+            if (picked.size >= 3) return@forEach
+            val names = event.participants
+                .map { it.name.lowercase(java.util.Locale.ROOT).trim() }
+                .filter { it.isNotBlank() }
+            if (names.any { it in usedTeams }) return@forEach
+            names.forEach { usedTeams += it }
+            picked += event
         }
         if (picked.size < 3) {
             candidates.forEach { event ->
-                if (picked.size < 3 && picked.values.none { it.id == event.id }) {
-                    picked["extra:${event.id}"] = event
-                }
+                if (picked.size < 3 && picked.none { it.id == event.id }) picked += event
             }
         }
-        picked.values.toList()
+        picked
     }
 
     LazyColumn(
@@ -256,6 +273,11 @@ fun SportsScreen(
                                     event = event,
                                     selected = event.id == selected?.id,
                                     onFocused = { selectedId = event.id },
+                                    onClick = {
+                                        selectedId = event.id
+                                        vm.findChannels(event)
+                                        showMatches = true
+                                    },
                                     modifier = Modifier.weight(1f),
                                 )
                             }
@@ -737,10 +759,11 @@ private fun EventCard(
     event: ScheduleEvent,
     selected: Boolean,
     onFocused: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     FocusableSurface(
-        onClick = {},
+        onClick = onClick,
         onFocused = onFocused,
         selected = selected,
         modifier = modifier.height(150.dp),
@@ -882,8 +905,13 @@ private fun MatchDialog(
 ) {
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
     ) {
+        BackHandler(onBack = onDismiss)
         val first = remember { androidx.compose.ui.focus.FocusRequester() }
         LaunchedEffect(matches, loading) {
             if (!loading && matches.isNotEmpty()) {
@@ -911,11 +939,17 @@ private fun MatchDialog(
                     Spacer(Modifier.width(14.dp))
                     MetaChip(eventLabel(event))
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "BACK  ·  Close",
-                        style = LocalMatchdayType.current.label.copy(fontSize = 11.sp),
-                        color = MatchdayColors.Dim,
-                    )
+                    FocusableSurface(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(50),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = "CLOSE",
+                            style = LocalMatchdayType.current.label.copy(fontSize = 10.sp),
+                            color = MatchdayColors.Muted,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(

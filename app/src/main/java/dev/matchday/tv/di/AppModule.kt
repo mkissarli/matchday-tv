@@ -4,6 +4,9 @@ import dev.matchday.tv.data.CompositeScheduleProvider
 import dev.matchday.tv.data.EspnMultiSportProvider
 import dev.matchday.tv.data.EspnSoccerProvider
 import dev.matchday.tv.data.MatchRepository
+import dev.matchday.tv.data.MergedSportProvider
+import dev.matchday.tv.data.MotoGpProvider
+import dev.matchday.tv.data.TheSportsDbSeasonProvider
 import dev.matchday.tv.data.PlaybackPreferences
 import dev.matchday.tv.data.ScheduleCache
 import dev.matchday.tv.data.TheSportsDbProvider
@@ -21,7 +24,13 @@ val appModule = module {
     single<FixtureProvider> {
         CompositeScheduleProvider(
             football = EspnSoccerProvider(get()),
-            otherSports = EspnMultiSportProvider(get()),
+            otherSports = MergedSportProvider(
+                listOf(
+                    EspnMultiSportProvider(get()),
+                    MotoGpProvider(get()),
+                    TheSportsDbSeasonProvider(get()),
+                ),
+            ),
             fallbackSports = TheSportsDbProvider(get()),
         )
     }

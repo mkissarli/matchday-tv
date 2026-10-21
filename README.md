@@ -14,12 +14,17 @@ Matchday ships with **no channels, playlists, subscriptions, credentials or medi
 ![Player](docs/screenshots/player-ts.png)
 ![Settings](docs/screenshots/settings.png)
 
-## What is in v0.1.1
+## What is in v0.1.2
 
 - **Schedule-first Sports Hub** — football (soccer), tennis, motorsport, cycling, Olympic sports and fighting are data-driven registry entries, not enum branches. A seven-day window, date-labelled cards, sport tabs, three headline matches, “Find channels”, and league sections that can be selected or collapsed.
-- **Football means association football** — ESPN’s keyless soccer feed supplies European, English and Latin American fixtures. NFL/NCAA is a separate `american-football` sport and never leaks into the Football tab. Other launch sports use ESPN’s F1, ATP/WTA, UFC and NFL scoreboards.
+- **Football means association football** — ESPN’s keyless soccer feed supplies European, English and Latin American fixtures. NFL/NCAA is a separate `american-football` sport and never leaks into the Football tab.
+- **Tennis lists matches, not tournaments** — ATP/WTA tournament feeds are expanded into the individual scheduled matches via ESPN’s core API; league chips are ATP/WTA and the tournament name travels with the venue line. Biggest names (static ranking proxy) surface in headlines and sort first within the league.
+- **Broader motorsport** — F1 race-weekend sessions, IndyCar and the three NASCAR series from ESPN scoreboards; MotoGP from its public event API; Formula 2, Formula 3, IMSA and Supercars from TheSportsDB season feeds.
 - **Schedule-only** — ESPN/TheSportsDB schedule fields only. There is deliberately no score, clock, standing or result field in the domain model, and no real-time polling.
-- **League-aware ordering** — competition sections are sorted by an approximate static popularity/viewership proxy (Premier League and Champions League first, then the other major leagues and sports). The league chips select a competition; each section header collapses. The order is deliberately local and does not poll ratings.
+- **League-aware ordering** — competition sections are sorted by an approximate static popularity/viewership proxy (Premier League and Champions League first, then the other major leagues and sports), with motorsport series and fighting slotted in below (UFC rank 100, NFL behind them at 150). The league chips select a competition; each section header collapses. The order is deliberately local and does not poll ratings.
+- **Headlines bubble the biggest names** — a static elite/strong team-and-player list boosts the most-followed participants into the three headline cards; live matches get a small additional bump and shared-participant duplicates are dropped.
+- **Partial refreshes never erase a sport** — if one free schedule provider is rate-limited, cached events for the sports it failed on are preserved and merged; one flaky provider can no longer blank a whole tab.
+- **Import diagnostics** — a source whose host cannot be reached says so; the offline wording is reserved for an actually absent connection, and a stuck platform-validation no longer blocks the fetch (OwnTV Core is built from the in-tree fork’s `matchday-diagnostics` branch). The Add Source text fields no longer trap D-pad focus: Down/Up and the keyboard’s Next/Done hand focus to the Import button.
 - **Automatic channel catalogue** — M3U import, name normalisation, quality parsing, language/country detection, genre rules, and logical-channel merging with confidence and variant awareness.
 - **Live TV browser** — category rail, search, favourites, recently watched, now/next from EPG, and a four-hour guide grid.
 - **Resilient playback** — libmpv for HLS and raw MPEG-TS, a quality ceiling (Auto/4K/FHD/HD/SD), variant fallback, cross-channel fixture failover, retry cooldown, failure caps and language priority **English → French → Arabic → German**.
@@ -114,8 +119,12 @@ locally; it is not shipped as content.
 
 - Football: ESPN public soccer scoreboard (`soccer/all`) — keyless, with a generated
   219-league id-to-name map for readable sections.
-- Motorsport/tennis/fighting/American football: ESPN F1, ATP, WTA, UFC and NFL
-  scoreboards — keyless.
+- Motorsport: F1, IndyCar and the three NASCAR series from ESPN scoreboards; MotoGP
+  from its public event API; Formula 2, Formula 3, IMSA and Supercars from
+  TheSportsDB season feeds — all keyless.
+- Tennis: ESPN ATP/WTA scoreboards expanded into individual matches through ESPN's
+  core competition API — keyless.
+- Fighting/American football: ESPN UFC and NFL scoreboards — keyless.
 - Cycling/Olympic/other fallback: TheSportsDB free keyless API — best-effort; the free
   tier is shared and rate-limited, so those tabs can be empty when no free feed exists.
 - No paid keys, no real-time scores, no standings.
@@ -125,6 +134,8 @@ locally; it is not shipped as content.
 - The ExoPlayer live path is present through the core engine but currently reconnects a
   healthy picture on the emulator due to a frame-watchdog false positive. libmpv is the
   default and working path.
+- WRC rally and FIA WEC/Le Mans have no reachable keyless schedule feed; they are not
+  shown yet.
 - Free schedule coverage is necessarily partial. Football and the ESPN-backed sports are
   broad; cycling/Olympic coverage depends on what TheSportsDB publishes and can be empty.
 - League order is a static popularity proxy, not live ratings; it is intentionally local

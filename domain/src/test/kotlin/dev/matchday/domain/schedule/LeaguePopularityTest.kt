@@ -11,12 +11,12 @@ class LeaguePopularityTest {
             "English Premier League",
             "UEFA Champions League",
             "Spanish LALIGA",
-            "NFL",
             "Formula 1",
-            "UFC 333",
             "ATP",
             "Japanese J.League",
             "Club Friendly",
+            "UFC 333",
+            "NFL",
         )
         val ranks = ordered.map(LeaguePopularity::rank)
         assertTrue("expected ascending ranks, got $ranks", ranks.zipWithNext().all { (a, b) -> a < b })
