@@ -4,12 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -84,8 +86,11 @@ fun SportsScreen(
         filtered.groupBy { eventLabel(it) }.keys
             .sortedWith(compareBy({ LeaguePopularity.rank(it) }, { it }))
     }
-    val visibleEvents = remember(filtered, statusFilter) {
+    val today = remember { LocalDate.now(ZoneId.systemDefault()) }
+    val zone = remember { ZoneId.systemDefault() }
+    val visibleEvents = remember(filtered, statusFilter, zone, today) {
         when (statusFilter) {
+            "today" -> filtered.filter { dayKeyOf(it, zone, today) == today }
             "live" -> filtered.filter { isLive(it) }
             else -> filtered
         }
@@ -96,14 +101,9 @@ fun SportsScreen(
     // Per day, then per league (biggest first), matches in time order within each league.
     // Ongoing multi-day events (tournaments, race weekends) started days ago but are
     // still current — pin them under today's band instead of a stale past date.
-    val today = remember { LocalDate.now(ZoneId.systemDefault()) }
     val dayGroups = remember(visibleEvents, today) {
-        val zone = ZoneId.systemDefault()
         visibleEvents
-            .groupBy {
-                val start = Instant.ofEpochMilli(it.startMs).atZone(zone).toLocalDate()
-                if (start < today) today else start
-            }
+            .groupBy { dayKeyOf(it, zone, today) }
             .map { (date, dayEvents) ->
                 val leagues = dayEvents
                     .groupBy { eventLabel(it) }
@@ -126,6 +126,7 @@ fun SportsScreen(
     }
     val selected = flatEvents.firstOrNull { it.id == selectedId }
     val liveCount = filtered.count { isLive(it) }
+    val todayCount = filtered.count { dayKeyOf(it, zone, today) == today }
 
     Column(modifier = modifier.fillMaxWidth()) {
         SportsHeader(
@@ -134,93 +135,99 @@ fun SportsScreen(
             attribution = state.attribution,
             onRefresh = vm::refresh,
         )
-        Spacer(Modifier.height(12.dp))
-        SportCoinRow(
-            sports = state.sports,
-            selected = state.selectedSportId,
-            onSelect = vm::selectSport,
-        )
-        Spacer(Modifier.height(14.dp))
-        StatusPillRow(
-            totalCount = filtered.size,
-            liveCount = liveCount,
-            selected = statusFilter,
-            onSelect = { statusFilter = it },
-        )
-        Spacer(Modifier.height(12.dp))
-        when {
-            state.loading && state.events.isEmpty() -> {
-                Text("Loading the schedule…", style = LocalMatchdayType.current.body, color = MatchdayColors.Muted)
-            }
-            state.error != null -> {
-                EmptyState(
-                    eyebrow = "SCHEDULE",
-                    title = "Schedule unavailable.",
-                    body = "The schedule source could not be reached: ${state.error}",
-                    action = {
-                        FocusableSurface(onClick = vm::refresh, shape = RoundedCornerShape(8.dp)) {
-                            Text("Retry", style = LocalMatchdayType.current.subtitle, color = MatchdayColors.Ivory)
-                        }
-                    },
+        Row(modifier = Modifier.weight(1f)) {
+            SportsSidebar(
+                sports = state.sports,
+                selected = state.selectedSportId,
+                onSelect = vm::selectSport,
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 22.dp)) {
+                Spacer(Modifier.height(4.dp))
+                StatusPillRow(
+                    totalCount = filtered.size,
+                    todayCount = todayCount,
+                    liveCount = liveCount,
+                    selected = statusFilter,
+                    onSelect = { statusFilter = it },
                 )
-            }
-            visibleEvents.isEmpty() -> {
-                EmptyState(
-                    eyebrow = "SCHEDULE",
-                    title = if (statusFilter == "live") "Nothing live right now." else "No events in the next seven days.",
-                    body = if (statusFilter == "live") "Choose All to see the full week's fixtures." else
-                        "The schedule source returned nothing for this sport. Choose All or refresh.",
-                )
-            }
-            else -> {
-                val zone = ZoneId.systemDefault()
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                ) {
-                    dayGroups.forEach { day ->
-                        val dayEvents = day.leagues.flatMap { it.second }
-                        item(key = "day:${day.date}") {
-                            DayBand(
-                                label = dayLabel(day.date, today),
-                                count = dayEvents.size,
-                                liveCount = dayEvents.count { isLive(it) },
-                            )
-                        }
-                        day.leagues.forEach { (league, events) ->
-                            val collapsed = league in collapsedSnapshot
-                            item(key = "league:${day.date}:$league") {
-                                LeagueBand(
-                                    label = league,
-                                    count = events.size,
-                                    collapsed = collapsed,
-                                    onToggle = {
-                                        collapsedLeagues =
-                                            if (collapsed) collapsedLeagues - league else collapsedLeagues + league
-                                    },
-                                )
-                            }
-                            if (!collapsed) {
-                                items(events, key = { "${day.date}:$league:${it.id}" }) { event ->
-                                    MatchRow(
-                                        event = event,
-                                        selected = event.id == selected?.id,
-                                        showDay = false,
-                                        onFocused = { selectedId = event.id },
-                                        onClick = {
-                                            selectedId = event.id
-                                            vm.openMatch(event)
-                                            showMatches = true
-                                        },
+                Spacer(Modifier.height(10.dp))
+                when {
+                    state.loading && state.events.isEmpty() -> {
+                        Text("Loading the schedule…", style = LocalMatchdayType.current.body, color = MatchdayColors.Muted)
+                    }
+                    state.error != null -> {
+                        EmptyState(
+                            eyebrow = "SCHEDULE",
+                            title = "Schedule unavailable.",
+                            body = "The schedule source could not be reached: ${state.error}",
+                            action = {
+                                FocusableSurface(onClick = vm::refresh, shape = RoundedCornerShape(8.dp)) {
+                                    Text("Retry", style = LocalMatchdayType.current.subtitle, color = MatchdayColors.Ivory)
+                                }
+                            },
+                        )
+                    }
+                    visibleEvents.isEmpty() -> {
+                        EmptyState(
+                            eyebrow = "SCHEDULE",
+                            title = if (statusFilter == "live") "Nothing live right now."
+                                else if (statusFilter == "today") "Nothing on today."
+                                else "No events in the next seven days.",
+                            body = if (statusFilter == "live") "Choose All to see the full week's fixtures."
+                                else if (statusFilter == "today") "Choose All for the rest of the week, or refresh."
+                                else "The schedule source returned nothing for this sport. Choose All or refresh.",
+                        )
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(bottom = 24.dp),
+                        ) {
+                            dayGroups.forEach { day ->
+                                val dayEvents = day.leagues.flatMap { it.second }
+                                item(key = "day:${day.date}") {
+                                    DayBand(
+                                        label = dayLabel(day.date, today),
+                                        count = dayEvents.size,
+                                        liveCount = dayEvents.count { isLive(it) },
                                     )
+                                }
+                                day.leagues.forEach { (league, events) ->
+                                    val collapsed = league in collapsedSnapshot
+                                    item(key = "league:${day.date}:$league") {
+                                        LeagueBand(
+                                            label = league,
+                                            count = events.size,
+                                            collapsed = collapsed,
+                                            onToggle = {
+                                                collapsedLeagues =
+                                                    if (collapsed) collapsedLeagues - league else collapsedLeagues + league
+                                            },
+                                        )
+                                    }
+                                    if (!collapsed) {
+                                        items(events, key = { "${day.date}:$league:${it.id}" }) { event ->
+                                            MatchRow(
+                                                event = event,
+                                                selected = event.id == selected?.id,
+                                                showDay = false,
+                                                onFocused = { selectedId = event.id },
+                                                onClick = {
+                                                    selectedId = event.id
+                                                    vm.openMatch(event)
+                                                    showMatches = true
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
+    }
     }
 
     if (showMatches && selected != null) {
@@ -246,6 +253,13 @@ private data class DayGroup(
     val date: LocalDate,
     val leagues: List<Pair<String, List<ScheduleEvent>>>,
 )
+
+/** Day bucket: upcoming fixtures by their local start date; ongoing multi-day
+ *  events (tournaments, race weekends) count under today so no stale bands appear. */
+private fun dayKeyOf(event: ScheduleEvent, zone: ZoneId, today: LocalDate): LocalDate {
+    val start = Instant.ofEpochMilli(event.startMs).atZone(zone).toLocalDate()
+    return if (start < today) today else start
+}
 
 private fun dayLabel(date: LocalDate, today: LocalDate): String = when {
     date == today -> "Today"
@@ -284,9 +298,9 @@ private fun SportsHeader(
     }
 }
 
-/** Round sport coins across the top, FCTV-style: filled coin for the chosen sport. */
+/** Left sidebar: "All" leads, then every registry sport, FCTV-style coins stacked. */
 @Composable
-private fun SportCoinRow(
+private fun SportsSidebar(
     sports: List<SportRegistryEntry>,
     selected: String,
     onSelect: (String) -> Unit,
@@ -295,11 +309,23 @@ private fun SportCoinRow(
         // "All" leads the coins; iconKey "other" renders a layered ball for it.
         listOf(SportRegistryEntry("all", "All", "other", -1, emptyList(), dev.matchday.domain.schedule.ParticipantStyle.EVENT)) + sports
     }
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        contentPadding = PaddingValues(horizontal = 2.dp),
+    Column(
+        modifier = Modifier
+            .width(126.dp)
+            .fillMaxHeight()
+            .background(MatchdayColors.Surface, RoundedCornerShape(12.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(top = 8.dp, bottom = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        items(entries, key = { it.id }) { sport ->
+        Text(
+            text = "SPORTS",
+            style = LocalMatchdayType.current.label.copy(fontSize = 10.sp, letterSpacing = 1.4.sp),
+            color = MatchdayColors.Dim,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        entries.forEach { sport ->
             SportCoin(
                 label = sport.displayName,
                 iconKey = sport.iconKey,
@@ -322,13 +348,13 @@ private fun SportCoin(label: String, iconKey: String, selected: Boolean, onClick
     ) {
         Box(
             modifier = Modifier
-                .width(56.dp)
-                .height(56.dp)
+                .width(44.dp)
+                .height(44.dp)
                 .background(
                     when {
                         selected -> MatchdayColors.Brick
                         focused -> MatchdayColors.SurfaceRaised
-                        else -> MatchdayColors.Surface
+                        else -> MatchdayColors.InkSoft
                     },
                     RoundedCornerShape(50),
                 )
@@ -336,12 +362,12 @@ private fun SportCoin(label: String, iconKey: String, selected: Boolean, onClick
                     when {
                         selected -> 0.dp
                         focused -> 3.dp
-                        else -> 1.dp
+                        else -> 0.dp
                     },
                     when {
                         selected -> Color.Transparent
                         focused -> MatchdayColors.Focus
-                        else -> MatchdayColors.CardLine
+                        else -> Color.Transparent
                     },
                     RoundedCornerShape(50),
                 ),
@@ -349,7 +375,7 @@ private fun SportCoin(label: String, iconKey: String, selected: Boolean, onClick
         ) {
             SportIcon(
                 sport = iconKey,
-                modifier = Modifier.width(26.dp).height(26.dp),
+                modifier = Modifier.width(22.dp).height(22.dp),
                 tint = when {
                     selected -> MatchdayColors.Ivory
                     focused -> MatchdayColors.Ivory
@@ -357,12 +383,14 @@ private fun SportCoin(label: String, iconKey: String, selected: Boolean, onClick
                 },
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
             text = label,
-            style = LocalMatchdayType.current.meta.copy(fontSize = 12.sp),
+            style = LocalMatchdayType.current.meta.copy(fontSize = 11.sp),
             color = if (selected || focused) MatchdayColors.Ivory else MatchdayColors.Muted,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 6.dp),
         )
     }
 }
@@ -371,6 +399,7 @@ private fun SportCoin(label: String, iconKey: String, selected: Boolean, onClick
 @Composable
 private fun StatusPillRow(
     totalCount: Int,
+    todayCount: Int,
     liveCount: Int,
     selected: String,
     onSelect: (String) -> Unit,
@@ -378,6 +407,11 @@ private fun StatusPillRow(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatusPill(label = "All", selected = selected == "all") { onSelect("all") }
+            StatusPill(
+                label = "Today ($todayCount)",
+                selected = selected == "today",
+                enabled = todayCount > 0 || selected == "today",
+            ) { onSelect("today") }
             StatusPill(
                 label = "Live ($liveCount)",
                 selected = selected == "live",
