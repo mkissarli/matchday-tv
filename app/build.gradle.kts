@@ -11,8 +11,8 @@ android {
         applicationId = "dev.matchday.tv"
         minSdk = 28
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.1.4"
 
         ndk {
             // Fire OS 7 sticks are 32-bit; Google TV devices may be arm64.
